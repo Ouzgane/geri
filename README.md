@@ -1,5 +1,7 @@
 # Pilotage des projets
 
+Site : [ouzgane.github.io/geri](https://ouzgane.github.io/geri/) (dépôt Ouzgane/geri, appelé larmina jusqu'au 15 novembre 2026 ; l'ancienne adresse ouzgane.github.io/larmina ne répond plus).
+
 Version en ligne du tableau de pilotage du portefeuille de projets : revenus, briefing du jour, matrice d'arbitrage en 3D, fiches projets et trajectoires. Une assistante, Geri (prononcé « Jéri »), répond aux questions sur le tableau, par écrit et à voix haute.
 
 ## Règle primordiale : pilotage seulement
@@ -116,7 +118,7 @@ Les noms de modèles par défaut changent avec le temps : en cas d'erreur, véri
 1. Compte Cloudflare gratuit sur dash.cloudflare.com. Ouvrir une fois **Workers & Pages** pour choisir le sous-domaine `….workers.dev`.
 2. **Account ID** : visible dans **Workers & Pages**, colonne de droite.
 3. **Jeton d'API** : My Profile → API Tokens → Create Token → modèle **Edit Cloudflare Workers**, puis ajouter la permission **Account · Workers AI · Read**.
-4. Dans GitHub, dépôt larmina → Settings → Secrets and variables → Actions : créer `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`.
+4. Dans GitHub, dépôt geri (ex-larmina) → Settings → Secrets and variables → Actions : créer `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`.
 5. Onglet Actions → **Relais IA** → Run workflow. Le workflow teste le relais, le déploie, puis écrit son adresse dans `config.js` : le site est branché.
 
 ### Vérifier
