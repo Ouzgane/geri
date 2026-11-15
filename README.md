@@ -48,13 +48,13 @@ Pour changer de mot de passe : republier avec le nouveau, mettre à jour la tâc
 
 ## Connexions du pilotage
 
-Toutes lisent sans rien modifier dans les projets ; seules les bases Notion du pilotage reçoivent des écritures. Chaque clé est un secret GitHub de ce dépôt (Settings → Secrets and variables → Actions), posé dans le relais au déploiement ; sans elle, la connexion reste éteinte et le site l'indique.
+Toutes lisent sans rien modifier dans les projets ; seules les bases Notion du pilotage reçoivent des écritures. Chaque clé est un secret GitHub de ce dépôt (Settings → Secrets and variables → Actions), posé dans le relais au déploiement : après avoir ajouté ou changé une clé, relancer le workflow « Relais IA » (Actions → Relais IA → Run workflow). Sans clé, la connexion reste éteinte et le site l'indique.
 
 | Connexion | Secret | Ce qu'elle fait |
 |---|---|---|
 | Payhip | `PAYHIP_CLE` (clé API, Settings → Developer) | Payhip envoie un webhook signé à chaque vente ou remboursement vers `…workers.dev/payhip` ; le relais vérifie la signature (SHA-256 de la clé) et inscrit la ligne dans « Revenus », sans e-mail ni IP de l'acheteur, sans doublon. L'adresse se règle dans le compte Payhip (Settings → Developer → Webhook URL, événements paid et refunded). |
 | Plausible | `PLAUSIBLE_CLE` (clé « Stats API », lecture seule) | Chaque matin à 5 h 17 UTC, le relais relève visites et visiteurs (jour, 7 et 30 jours) et les objectifs des sites de `PLAUSIBLE_SITES`, dans « Mesures ». `POST /releve` relance le relevé à la demande. |
-| GitHub | `GITHUB_LECTURE` (jeton fin en lecture : Contents, Pull requests, Actions) | `GET /suivi` lit les dépôts de `GITHUB_DEPOTS` : pull requests ouvertes, dernier commit, échecs récents (gardé 10 minutes). |
+| GitHub | `GH_LECTURE` (jeton fin en lecture : Contents, Pull requests, Actions ; GitHub refuse les noms en `GITHUB_…`, le relais le reçoit sous le nom `GITHUB_LECTURE`) | `GET /suivi` lit les dépôts de `GITHUB_DEPOTS` : pull requests ouvertes, dernier commit, échecs récents (gardé 10 minutes). |
 | Google Drive | aucun (connecteur du rapport du matin) | Dossier « GERI : relevés à déposer » : tu y déposes les exports qu'aucun agent ne peut lire (KDP, Partenaires Amazon) ; le rapport du matin les reporte dans « Mesures ». |
 
 Les nouvelles bases (Mesures, Actions, Décisions, Revenus) doivent être partagées avec l'intégration Notion de Geri, comme Projets et Rapports du matin ; sinon le site affiche « base non lisible » et le reste fonctionne.

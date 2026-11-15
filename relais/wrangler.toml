@@ -57,7 +57,7 @@ PAYHIP_PROJET = "kitvital"
 # Plausible (secret GitHub PLAUSIBLE_CLE = clé « Stats API », lecture seule) : projet|site, séparés par « ; ».
 PLAUSIBLE_SITES = "kitvital|kitvital.fr; sauvermonepargne|sauvermonepargne.fr"
 
-# GitHub (secret GitHub GITHUB_LECTURE = jeton fin en lecture seule) : dépôt=projet, séparés par « ; ».
+# GitHub (secret GitHub GH_LECTURE, posé ici sous le nom GITHUB_LECTURE = jeton fin en lecture seule) : dépôt=projet, séparés par « ; ».
 GITHUB_PROPRIETAIRE = "Ouzgane"
 GITHUB_DEPOTS = "pare-72h=kitvital; kitvital-actualites=kitvital; epargne-site=sauvermonepargne; raphael-video=videos-ia; trading5=trader5; tablee=tablee"
 

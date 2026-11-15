@@ -25,7 +25,9 @@ jobs:
       NOTION_CLE: ${{ secrets.NOTION_CLE }}
       PAYHIP_CLE: ${{ secrets.PAYHIP_CLE }}
       PLAUSIBLE_CLE: ${{ secrets.PLAUSIBLE_CLE }}
-      GITHUB_LECTURE: ${{ secrets.GITHUB_LECTURE }}
+      # GitHub refuse les noms de secrets en GITHUB_… : le secret s'appelle GH_LECTURE,
+      # et devient GITHUB_LECTURE dans le relais (Cloudflare n'a pas cette règle).
+      GH_LECTURE: ${{ secrets.GH_LECTURE }}
     steps:
       - uses: actions/checkout@v7
 
@@ -79,9 +81,9 @@ jobs:
         run: printf '%s' "$PLAUSIBLE_CLE" | npx --yes wrangler@4 secret put PLAUSIBLE_CLE
 
       - name: Jeton GitHub en lecture (suivi des dépôts des projets)
-        if: steps.verif.outputs.pret == 'true' && env.GITHUB_LECTURE != ''
+        if: steps.verif.outputs.pret == 'true' && env.GH_LECTURE != ''
         working-directory: relais
-        run: printf '%s' "$GITHUB_LECTURE" | npx --yes wrangler@4 secret put GITHUB_LECTURE
+        run: printf '%s' "$GH_LECTURE" | npx --yes wrangler@4 secret put GITHUB_LECTURE
 
       - name: Brancher le site sur le relais
         if: steps.verif.outputs.pret == 'true'

@@ -94,7 +94,7 @@ export default {
     }
     if (url.pathname === '/suivi' && request.method === 'GET') {
       if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
-      if (!env.GITHUB_LECTURE) return json({ erreur: 'Suivi GitHub pas encore branché (secret GITHUB_LECTURE).' }, 501, cors);
+      if (!env.GITHUB_LECTURE) return json({ erreur: 'Suivi GitHub pas encore branché (secret GitHub GH_LECTURE).' }, 501, cors);
       return json(await suiviEnCache(env), 200, cors);
     }
     if (url.pathname === '/releve' && request.method === 'POST') {

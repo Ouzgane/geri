@@ -913,7 +913,7 @@ dash.draw('prs-attente', (n) => {
   if (statut('meta') !== 'ok') { n.replaceChildren(); return; }
   const meta = meta0();
   const suivi = kpi0(dash.data('suivi').data);
-  if (!meta.connexions || !meta.connexions.github) { n.replaceChildren(el('p', 'hud-note', 'Suivi GitHub éteint : il s’allume avec le secret GITHUB_LECTURE (jeton en lecture seule).')); return; }
+  if (!meta.connexions || !meta.connexions.github) { n.replaceChildren(el('p', 'hud-note', 'Suivi GitHub éteint : il s’allume avec le secret GitHub GH_LECTURE (jeton en lecture seule), puis le workflow « Relais IA » relancé.')); return; }
   if (!suivi.depots) { n.replaceChildren(el('p', 'hud-note', 'Lecture de GitHub…')); return; }
   const noms = new Map((dash.data('projets').data || []).map((p) => [p.id, p.nom_court || p.projet]));
   const lignes = [];

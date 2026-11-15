@@ -1,5 +1,5 @@
 // Suivi GitHub en lecture seule : pull requests ouvertes (en attente de ta décision), dernier commit
-// et échecs de workflows des 7 derniers jours, dépôt par dépôt. Jeton fin en lecture (secret GITHUB_LECTURE).
+// et échecs de workflows des 7 derniers jours, dépôt par dépôt. Jeton fin en lecture : secret GitHub GH_LECTURE, reçu par le relais sous le nom GITHUB_LECTURE.
 // Rien n'est écrit sur GitHub.
 
 // GITHUB_DEPOTS = "pare-72h=kitvital; epargne-site=sauvermonepargne; …"
