@@ -27,7 +27,7 @@
 
   let jeton = null, jetonPret = Promise.resolve(null), contexteTexte = '', donnees = null;
   let historique = [], enCours = false, salue = false, sonde = false;
-  let publieLe = 0, derniereSynchro = 0, synchroEnCours = null;
+  let publieLe = 0, derniereSynchro = 0, synchroEnCours = null, premiereSynchro = Promise.resolve();
   const synth = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window ? window.speechSynthesis : null;
   let voixActive = !!synth && CFG.voix !== false && lire(CLE_VOIX) !== '0';
   let voixChoisie = null, voixDebloquee = false, veille = 0, panneSignalee = false;
@@ -535,27 +535,38 @@
     }
   }
 
-  function saluer({ parle = true } = {}) {
+  // L'accueil attend la première lecture de Notion (5 s au plus) : sans cela, il serait construit
+  // sur la copie chiffrée du dépôt, qui peut dater de plusieurs jours (rapport, décisions).
+  async function saluer({ parle = true } = {}) {
     salue = true;
+    await Promise.race([premiereSynchro, new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
     const p = donnees || {};
     const projets = p.projets || [];
     const total = (p.revenus || []).reduce((t, r) => t + montant(r), 0);
     const syn = (p.syntheses || []).slice().sort(parDate).pop();
     let date = '';
     if (syn && /^\d{4}-\d{2}-\d{2}$/.test(syn.date)) { const [, mo, j] = syn.date.split('-'); date = ` du ${+j} ${MOIS[+mo - 1]}`; }
-    const accel = projets.filter((x) => x.recommandation === 'Accélérer').map((x) => x.nom_court || x.projet);
-    const arb = projets.filter((x) => x.recommandation === 'À arbitrer').map((x) => x.nom_court || x.projet);
+    const nom = (x) => x.nom_court || x.projet;
+    // Même règle que l'indicateur « Décisions en attente » (app.js) : c'est la décision d'EMO qui compte,
+    // pas la recommandation du rapport.
+    const aDecider = projets.filter((x) => decisionEnAttente(x.decision)).map(nom);
+    const accel = projets.filter((x) => x.recommandation === 'Accélérer').map(nom);
+    const aRevoir = projets.filter((x) => !decisionEnAttente(x.decision) && x.decision !== 'Arrêter'
+      && x.recommandation && x.recommandation !== x.decision && x.recommandation !== 'Accélérer').map(nom);
     const h = new Date().getHours();
     const texte = `${h >= 18 || h < 5 ? 'Bonsoir' : 'Bonjour'}. J’ai lu le rapport${date} : ${projets.length} projets suivis, ${total > 0 ? eur(total) + ' encaissés' : 'aucun revenu encaissé pour l’instant'}.`
       + (accel.length ? ` Le rapport propose d’accélérer ${liste(accel)}.` : '')
-      + (arb.length ? ` ${liste(arb)} ${arb.length > 1 ? 'attendent' : 'attend'} ton arbitrage.` : '')
+      + (aDecider.length ? ` ${liste(aDecider)} ${aDecider.length > 1 ? 'attendent' : 'attend'} ta décision.` : '')
+      + (aRevoir.length ? ` Il recommande autre chose que ta décision pour ${liste(aRevoir)}.` : '')
       + ' Que veux-tu examiner ?';
     ajouterAssistant(texte, { parle });
     const premieres = ['Résume-moi la situation du jour', 'Quel projet accélérer en priorité ?'];
-    if (arb.length >= 2) premieres.push(`${arb[0]} ou ${arb[1]} : que choisir ?`);
+    if (aDecider.length) premieres.push(`Que décider pour ${aDecider[0]} ?`);
+    else if (aRevoir.length) premieres.push(`Pourquoi revoir ${aRevoir[0]} ?`);
     else premieres.push('Qu’est-ce qui bloque en ce moment ?');
     puces(premieres);
   }
+  const decisionEnAttente = (d) => !d || d === 'À décider' || d === 'À arbitrer';
   const liste = (l) => (l.length < 2 ? l.join('') : l.slice(0, -1).join(', ') + ' et ' + l[l.length - 1]);
 
   // ── Ouverture, fermeture, saisie ─────────────────────────────────────────────
@@ -804,7 +815,7 @@
       publieLe = Date.parse(publie || '') || 0;
       contexteTexte = construireContexte(donnees);
       jetonPret = deriver(mdp).then((h) => { jeton = h; return h; }).catch(() => null);
-      synchroniserNotion(true);
+      premiereSynchro = synchroniserNotion(true);
       racine.hidden = false;
       racine.classList.add('ia-appel');
       requestAnimationFrame(majMode);

@@ -46,11 +46,12 @@ dash.calc('kpi', {
       total_30j_precedents: somme(revenus.filter((ligne) => String(ligne.date) >= depuis60j && String(ligne.date) < depuis30j)),
       nb_projets: projets.length,
       nb_avec_revenu: projets.filter((projet) => avecRevenu.has(projet.id)).length,
-      nb_a_decider: projets.filter((projet) => projet.decision === 'À décider').length,
+      // Décision vide (« À décider ») ou laissée « À arbitrer » dans Notion : la décision reste à prendre.
+      nb_a_decider: projets.filter((projet) => !projet.decision || projet.decision === 'À décider' || projet.decision === 'À arbitrer').length,
       proche_projet: sansRevenu.length ? sansRevenu[0].projet : null,
       proche_avancement: sansRevenu.length ? Number(sansRevenu[0].avancement) : null,
       avancement_moyen: projets.length ? Math.round(projets.reduce((t, projet) => t + (Number(projet.avancement) || 0), 0) / projets.length) : 0,
-      nb_decides: projets.filter((projet) => projet.decision && projet.decision !== 'À décider').length,
+      nb_decides: projets.filter((projet) => projet.decision && projet.decision !== 'À décider' && projet.decision !== 'À arbitrer').length,
       nb_automatisations: projets.reduce((t, projet) => t + (Number(projet.automatisations) || 0), 0),
     }];
   },
