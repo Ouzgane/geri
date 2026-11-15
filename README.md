@@ -2,6 +2,10 @@
 
 Version en ligne du tableau de pilotage du portefeuille de projets : revenus, briefing du jour, matrice d'arbitrage en 3D, fiches projets et trajectoires. Une assistante, Geri (prononcé « Jéri »), répond aux questions sur le tableau, par écrit et à voix haute.
 
+## Règle primordiale : pilotage seulement
+
+Ce dépôt, le site et le projet Claude « GERI » servent uniquement au pilotage et au suivi des projets : lire leur état, le tenir à jour dans Notion, aider à arbitrer. Toute action sur un projet (contenu, code, site, tâche planifiée, compte) se mène dans l'espace de ce projet, jamais ici, et deux projets ne se mélangent jamais dans une même session (règle du porteur du 15 novembre 2026, détaillée dans `CLAUDE.md`). Geri applique la même règle : elle recommande et dit dans quel projet agir, elle n'agit pas.
+
 ## Confidentialité
 
 - Ce dépôt est public, mais il ne contient **aucune donnée lisible**. Les données sont dans `donnees/pilotage.chiffre.json`, chiffrées en AES-GCM 256 bits avec une clé dérivée du mot de passe (PBKDF2-SHA256, 310 000 itérations, sel et vecteur aléatoires à chaque publication).
