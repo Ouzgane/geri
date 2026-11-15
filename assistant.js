@@ -584,6 +584,18 @@
     return j;
   }
 
+  // Relevé de l'audience à la demande (Plausible → base Mesures), puis relecture de Notion.
+  async function relever() {
+    if (!RELAIS) throw new Error('Relais non déployé.');
+    await jetonPret;
+    if (!jeton) throw new Error('Accès non prêt.');
+    const r = await fetch(RELAIS + '/releve', { method: 'POST', headers: { Authorization: 'Bearer ' + jeton } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
+    await synchroniserNotion(true);
+    return j;
+  }
+
   function proposerFait(fait, liste) {
     if (!fait || !fait.action) return;
     const vue = (liste || []).find((x) => x.ref === fait.action);
@@ -979,6 +991,7 @@
     contexte: () => contexteTexte,
     synchroniser: () => synchroniserNotion(true),
     cocher,
+    relever,
     pourLaVoix,
   };
 })();

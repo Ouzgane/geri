@@ -1019,9 +1019,25 @@ dash.draw('sources', (n) => {
     li.append(d, el('span', 'pl-source-nom', s.nom), el('span', 'pl-source-etat', lib + (s.date ? ' · ' + jourLisible(s.date, fmtJourCourt) : '') + (s.note ? ' · ' + s.note : '')));
     ul.appendChild(li);
   }
+  let ligne = null;
+  if (meta.connexions && meta.connexions.plausible && window.ASSISTANT && window.ASSISTANT.relever) {
+    const b = el('button', 'pl-fait pl-relever', 'Relever l’audience maintenant');
+    b.type = 'button';
+    const msg = el('span', 'pl-relever-msg', PP.releve || '');
+    b.addEventListener('click', async () => {
+      b.disabled = true; b.textContent = 'Relevé en cours…';
+      try {
+        const r = await window.ASSISTANT.relever();
+        PP.releve = r.raison ? r.raison : (r.sites || []).map((x) => `${x.site} : ${x.ok ? x.ecrites + ' mesures' : 'erreur (' + x.erreur + ')'}`).join(' · ');
+      } catch (e) { PP.releve = 'Échec : ' + (e.message === 'Failed to fetch' ? 'relais injoignable' : e.message); }
+      dash.draw('sources');
+    });
+    ligne = el('div', 'pl-relever-ligne');
+    ligne.append(b, msg);
+  }
   const tete = el('p', 'hud-note');
   tete.textContent = typeof fiab === 'number' ? `Fiabilité du rapport du jour : ${fiab} % des sources lues.` : nonVerif ? `Rapport du jour : ${nonVerif} point${nonVerif > 1 ? 's' : ''} non vérifiable${nonVerif > 1 ? 's' : ''} signalé${nonVerif > 1 ? 's' : ''}.` : 'Rapport du jour : aucune source signalée comme illisible.';
-  n.replaceChildren(tete, ul);
+  n.replaceChildren(tete, ul, ...(ligne ? [ligne] : []));
 });
 
 // Simulateur : « si je mets en pause… » (rien n'est écrit).
