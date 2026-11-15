@@ -15,7 +15,9 @@ Le site lit Notion en direct, par le relais de Geri (`GET /projets`, jeton requi
 - Base **Projets** : décision, statut et objectif toujours repris ; les autres champs dès que la fiche a été modifiée après la publication de la copie chiffrée. Un projet créé dans Notion apparaît aussitôt.
 - Base **Rapports du matin** : briefing du jour (titre, synthèse, arbitrages, alertes), avancement de chaque projet jour après jour et journal des encaissements.
 
-Chaque matin, la tâche planifiée « Pilotage des projets : rapport quotidien » met à jour le tableau de bord dans Claude et écrit le rapport du jour dans ces deux bases : il apparaît sur le site sans republier la copie chiffrée. Les tâches planifiées n'ont pas accès à GitHub.
+Chaque matin, la tâche planifiée « Pilotage des projets : rapport quotidien » met à jour le tableau de bord dans Claude et écrit le rapport du jour dans ces deux bases : il apparaît sur le site sans republier la copie chiffrée. Une tâche planifiée n'a accès qu'aux dépôts GitHub de la conversation où elle a été créée, et ce réglage ne se modifie pas ensuite : la tâche a été recréée le 15 novembre 2026 depuis une conversation qui avait les dépôts des projets (pare-72h, epargne-site, raphael-video, trading5, tablee, larmina, kitvital-actualites), qu'elle lit sans y écrire. Pour lui donner un nouveau dépôt, il faut la recréer de la même façon. Elle ne lit ni Plausible, ni Payhip, ni KDP, ni Partenaires Amazon : ces chiffres viennent des sessions de travail, notés et datés dans le journal des fiches.
+
+Geri accueille avec le rapport le plus récent lu dans Notion (elle attend cette lecture 5 secondes au plus). « Décisions en attente » et « … attend ta décision » comptent les projets dont la Décision est vide ou « À arbitrer » ; Geri signale aussi les projets où la recommandation du rapport diffère de la décision prise.
 
 La copie chiffrée (`donnees/pilotage.chiffre.json`) sert de base de départ et de secours si Notion ne répond pas. Publication manuelle, à partir des quatre fichiers du tableau de bord (`projets.json`, `rapports.json`, `syntheses.json`, `revenus.csv`) copiés dans `clair/`, un dossier ignoré par Git :
 
