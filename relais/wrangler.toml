@@ -40,3 +40,27 @@ ORIGINES = "https://ouzgane.github.io"
 # dans le navigateur (PBKDF2, 310 000 itérations) : sans mot de passe, pas d'IA.
 # Recalculer avec « node outils/empreinte-ia.mjs » si le mot de passe change.
 JETON_EMPREINTE = "6ef0f110b6b13dd827e4bceb3744c6e50b819b450001792b6879eb8f54e4f106"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  CONNEXIONS DU PILOTAGE (lecture seule sur les projets ; écriture seulement dans Notion)
+# ─────────────────────────────────────────────────────────────────────────────
+# Bases ajoutées le 15/11/2026 sous « Pilotage des projets » (à partager avec l'intégration Notion).
+NOTION_MESURES = "419e1d65-c588-8109-92ef-000be19ce543"
+NOTION_ACTIONS = "419e1d65-c588-81ef-bf0b-000b61b20a3d"
+NOTION_DECISIONS = "419e1d65-c588-81e7-8060-000b077b4d9a"
+NOTION_REVENUS = "9e890c74-8500-4391-a576-c8655d4a0f6a"
+
+# Payhip → POST /payhip (secret GitHub PAYHIP_CLE = clé API de Payhip, pour vérifier la signature).
+# Toutes les ventes de cette boutique sont rattachées à ce projet.
+PAYHIP_PROJET = "kitvital"
+
+# Plausible (secret GitHub PLAUSIBLE_CLE = clé « Stats API », lecture seule) : projet|site, séparés par « ; ».
+PLAUSIBLE_SITES = "kitvital|kitvital.fr; sauvermonepargne|sauvermonepargne.fr"
+
+# GitHub (secret GitHub GITHUB_LECTURE = jeton fin en lecture seule) : dépôt=projet, séparés par « ; ».
+GITHUB_PROPRIETAIRE = "Ouzgane"
+GITHUB_DEPOTS = "pare-72h=kitvital; kitvital-actualites=kitvital; epargne-site=sauvermonepargne; raphael-video=videos-ia; trading5=trader5; tablee=tablee"
+
+# Relevé de l'audience chaque matin à 5 h 17 UTC (6 h 17 ou 7 h 17 à Paris), avant le rapport de 7 h 47.
+[triggers]
+crons = ["17 5 * * *"]

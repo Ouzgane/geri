@@ -53,6 +53,12 @@
       sources.rapports = paquet.rapports || [];
       sources.syntheses = paquet.syntheses || [];
       sources.revenus = paquet.revenus || [];
+      // Bases Notion ajoutées le 15/11/2026 (lues par le relais) et suivi GitHub.
+      sources.mesures = paquet.mesures || [];
+      sources.actions = paquet.actions || [];
+      sources.decisions = paquet.decisions || [];
+      sources.suivi = paquet.suivi ? [paquet.suivi] : [];
+      sources.meta = [{ bases: paquet.bases || {}, connexions: paquet.connexions || {}, lu_le: paquet.lu_le || null }];
       Object.values(calculs).forEach((c) => { delete c.valeur; });
       etat.statut = 'ok';
       toutDessiner();

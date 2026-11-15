@@ -8,6 +8,8 @@ window.PILOTAGE_IA = {
   // Voix féminine choisie automatiquement ; mettre un nom (ex. 'Audrey') pour en imposer une.
   voixNom: '',
   voix: true,
+  // Nombre de projets ouverts en même temps au-delà duquel le tableau le signale (gouvernance).
+  plafondProjets: 3,
   // Voix intégrée (Piper) : fr_FR-siwis-medium (meilleure, ~63 Mo) ou fr_FR-siwis-low (~28 Mo).
   voixPiper: 'fr_FR-siwis-medium',
   voixVitesse: 1,

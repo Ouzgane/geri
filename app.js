@@ -253,7 +253,6 @@ const liste = (nom, champ) => {
   });
 };
 liste('s-arbitrages', 'arbitrages');
-liste('s-alertes', 'alertes');
 
 // ---------- Cœur : revenu cumulé et jauges ----------
 dash.draw('reacteur', (n) => {
@@ -706,6 +705,14 @@ dash.draw('cartes', (n) => {
     const pct = el('span', 'hud-pct');
     pct.append(marquer(el('span', null, p.avancement), 'projets', 'avancement', ou), document.createTextNode(' %'));
     prog.append(segs, pct);
+    const trac = blocTraction(p, col);
+    const siennes = statut('liste') === 'ok' ? dash.data('liste').data.filter((a) => a.projet_id === p.id && a.qui === 'Toi') : [];
+    if (siennes.length) {
+      const enRetard = siennes.filter((a) => a.retard > 0).length;
+      const ch = el('a', 'hud-chip pl-chip-liste' + (enRetard ? ' pl-chip-retard' : ''), `${siennes.length} action${siennes.length > 1 ? 's' : ''} pour toi${enRetard ? ` · ${enRetard} en retard` : ''}`);
+      ch.href = '#ma-liste';
+      chips.appendChild(ch);
+    }
     const kv = el('dl', 'hud-kv');
     const ligne = (label, valeur, cible = kv) => { cible.append(el('dt', null, label)); const d = el('dd'); d.append(valeur); cible.append(d); };
     ligne('Décision', marquer(el('span', null, p.decision || '—'), 'projets', 'decision', ou));
@@ -733,13 +740,21 @@ dash.draw('cartes', (n) => {
     }
     if (p.echeance) ligne('Échéance', marquer(el('span', null, jourLisible(p.echeance)), 'projets', 'echeance', ou), kv2);
     ligne('Tâches', marquer(el('span', null, p.automatisations ?? 0), 'projets', 'automatisations', ou), kv2);
+    ligne('Objectif', el('span', null, typeof p.objectif_mensuel === 'number' ? euros(p.objectif_mensuel) + ' par mois' : 'pas encore fixé'), kv2);
+    ligne('Critère d’arrêt', el('span', p.critere_arret ? null : 'hud-blk', p.critere_arret ? p.critere_arret + (p.date_critere ? ' (vérifié le ' + jourLisible(p.date_critere) + ')' : '') : 'pas encore fixé'), kv2);
+    if (typeof p.couts_mensuels === 'number') ligne('Coûts', el('span', null, euros(p.couts_mensuels) + ' par mois · net 30 j : ' + euros((Number(revenus.get(p.id)?.revenu_30j) || 0) - p.couts_mensuels)), kv2);
+    if (typeof p.capital === 'number') ligne('Capital en jeu', el('span', 'hud-num', euros(p.capital)), kv2);
+    const journal = statut('decisions') === 'ok' ? (dash.data('decisions').data || []).filter((d) => d.projet_id === p.id).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] : null;
+    if (journal) ligne('Décidé', el('span', null, `${journal.choix || '—'} le ${jourLisible(journal.date, fmtJourCourt)}${journal.raison ? ' : ' + journal.raison : ''}${journal.revue ? ' · à revoir le ' + jourLisible(journal.revue, fmtJourCourt) : ''}`), kv2);
     if (/^https:\/\//.test(String(p.lien || ''))) {
       const a = el('a', null, p.lien_libelle || p.lien);
       a.href = p.lien; a.target = '_blank'; a.rel = 'noopener noreferrer';
       ligne('Lien', a, kv2);
     }
     det.appendChild(kv2);
-    c.append(top, chips, prog, kv, det);
+    c.append(top, chips, prog);
+    if (trac) c.append(trac);
+    c.append(kv, det);
     return c;
   });
   n.replaceChildren(...(cartes.length ? cartes : [el('p', 'hud-empty', 'Aucun projet dans ce pôle.')]));
@@ -800,3 +815,292 @@ dash.draw('evolution', (n) => {
   }
   n.appendChild(leg);
 });
+
+// ---------- Pilotage : ta liste, gouvernance, traction (ajouté le 15/11/2026) ----------
+// Les calculs sont dans pilotage.js, partagés avec Geri (mêmes références A1, A2…).
+const PC = window.PILOTAGE_CALCULS;
+const plafondProjets = () => Number((window.PILOTAGE_IA || {}).plafondProjets) || 3;
+const nombreFr = (v) => (typeof v === 'number' ? new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(v) : '—');
+const valeurMesure = (indicateur, v) => (/€/.test(String(indicateur)) ? euros(v) : nombreFr(v));
+const meta0 = () => kpi0(dash.data('meta').data);
+const vide = (n, oui) => { const b = n.closest('.pl-bloc'); if (b) b.classList.toggle('pl-vide', !!oui); };
+
+dash.calc('liste', { title: 'Ta liste', description: 'Actions à faire, triées : ce qui t’attend, impact sur le revenu, retard, échéance.', inputs: ['actions', 'projets'], fn: (a, p) => PC.liste(a, p) });
+dash.calc('liste_resume', { title: 'Résumé de ta liste', description: 'Actions qui t’attendent, en retard, retard cumulé.', inputs: ['liste'], fn: (l) => [PC.resumeListe(l)] });
+dash.calc('gouv', { title: 'Gouvernance', description: 'Projets ouverts, décisions en attente, écarts, revues.', inputs: ['projets', 'decisions', 'liste'], fn: (p, d, l) => [PC.gouvernance(p, d, l, { plafond: plafondProjets() })] });
+
+texte('k-liste', ['liste_resume'], (r) => kpi0(r).toi);
+texte('k-liste-retard', ['liste_resume'], (r) => kpi0(r).en_retard);
+texte('k-liste-cumul', ['liste_resume'], (r) => (kpi0(r).retard_cumule == null ? null : kpi0(r).retard_cumule + ' j'));
+
+// Filtre de la liste (contrôle fixe).
+PP.qui = 'Toi';
+document.querySelectorAll('[data-qui]').forEach((b) => {
+  b.addEventListener('click', () => {
+    PP.qui = b.getAttribute('data-qui');
+    document.querySelectorAll('[data-qui]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    dash.draw('ma-liste');
+  });
+});
+
+const IMPACT_COUL = { Revenu: C.ok, 'Décision': C.warn, Obligation: C.bad, 'Vérification': C.pause };
+const quand = (a) => (a.retard > 0 ? `${a.retard} j de retard` : a.dans === 0 ? 'aujourd’hui' : a.dans === 1 ? 'demain' : a.dans !== null ? `dans ${a.dans} j` : a.age !== null ? `ouverte il y a ${a.age} j` : '');
+
+async function cocherAction(a, bouton, statutCible, ligne) {
+  if (!window.ASSISTANT || !window.ASSISTANT.cocher) return;
+  const avant = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = 'Enregistrement…';
+  try {
+    await window.ASSISTANT.cocher(a.id, statutCible);
+  } catch (e) {
+    bouton.disabled = false;
+    bouton.textContent = avant;
+    let err = ligne.querySelector('.pl-err');
+    if (!err) { err = el('span', 'pl-err'); ligne.appendChild(err); }
+    err.textContent = e && e.message === 'Failed to fetch' ? 'Relais injoignable.' : (e && e.message) || 'Échec.';
+  }
+}
+
+dash.draw('ma-liste', (n) => {
+  const s = statut('liste');
+  if (s !== 'ok') { n.replaceChildren(messageEtat(s)); return; }
+  const meta = meta0();
+  if (meta.bases && meta.bases.actions === 'erreur') { n.replaceChildren(el('p', 'hud-empty', 'La base Actions n’est pas lisible : partage-la avec l’intégration Notion de Geri.')); return; }
+  const l = dash.data('liste').data.filter((a) => PP.qui === 'Tout' || a.qui === PP.qui);
+  if (!l.length) { n.replaceChildren(el('p', 'hud-empty', PP.qui === 'Toi' ? 'Rien ne t’attend pour l’instant.' : 'Rien dans cette vue.')); return; }
+  const anim = mouvement() && premiereFois('ma-liste');
+  n.replaceChildren(...l.map((a, i) => {
+    const li = el('li', 'pl-item' + (a.retard > 0 ? ' pl-retard' : '') + (anim ? ' hud-in' : ''));
+    if (anim) li.style.animationDelay = (i * 0.04) + 's';
+    li.id = 'action-' + a.ref;
+    const corps = el('div', 'pl-corps');
+    const meta = el('div', 'pl-meta');
+    const imp = el('span', 'hud-chip pl-impact', a.impact || '—');
+    imp.style.setProperty('--c', IMPACT_COUL[a.impact] || C.pause);
+    meta.append(el('span', 'pl-projet', a.projet_nom), imp);
+    if (a.qui && a.qui !== 'Toi') meta.append(el('span', 'hud-chip', a.qui));
+    const q = quand(a);
+    if (q) meta.append(el('span', 'pl-quand' + (a.retard > 0 ? ' pl-quand-retard' : ''), q));
+    corps.append(el('div', 'pl-titre', a.titre), meta);
+    if (a.ou) corps.append(el('div', 'pl-ou', 'Où : ' + a.ou));
+    const b = el('button', 'pl-fait', 'C’est fait');
+    b.type = 'button';
+    b.addEventListener('click', () => cocherAction(a, b, 'Fait', li));
+    li.append(el('span', 'pl-ref', a.ref), corps, b);
+    return li;
+  }));
+});
+
+dash.draw('liste-faite', (n) => {
+  if (statut('actions', 'projets') !== 'ok') { n.replaceChildren(); return; }
+  const f = PC.faites(dash.data('actions').data, dash.data('projets').data);
+  vide(n, !f.length);
+  n.replaceChildren(...f.map((a) => {
+    const li = el('li', 'pl-item pl-item-fait');
+    const corps = el('div', 'pl-corps');
+    corps.append(el('div', 'pl-titre', a.titre), el('div', 'pl-meta', `${a.projet_nom} · fait le ${jourLisible(a.faite, fmtJourCourt)}`));
+    const b = el('button', 'pl-fait pl-rouvrir', 'Rouvrir');
+    b.type = 'button';
+    b.addEventListener('click', () => cocherAction(a, b, 'À faire', li));
+    li.append(el('span', 'pl-ref', '✓'), corps, b);
+    return li;
+  }));
+});
+
+// Pull requests ouvertes et échecs récents, lus sur GitHub par le relais (lecture seule).
+dash.draw('prs-attente', (n) => {
+  if (statut('meta') !== 'ok') { n.replaceChildren(); return; }
+  const meta = meta0();
+  const suivi = kpi0(dash.data('suivi').data);
+  if (!meta.connexions || !meta.connexions.github) { n.replaceChildren(el('p', 'hud-note', 'Suivi GitHub éteint : il s’allume avec le secret GITHUB_LECTURE (jeton en lecture seule).')); return; }
+  if (!suivi.depots) { n.replaceChildren(el('p', 'hud-note', 'Lecture de GitHub…')); return; }
+  const noms = new Map((dash.data('projets').data || []).map((p) => [p.id, p.nom_court || p.projet]));
+  const lignes = [];
+  for (const d of suivi.depots) {
+    const ligneAlerte = (t) => { const li = el('li', 'pl-item pl-retard'); const c = el('div', 'pl-corps'); c.append(el('div', 'pl-titre', t)); li.append(el('span', 'pl-ref', '!'), c); return li; };
+    if (d.erreur) { lignes.push(ligneAlerte(`${d.depot} : lecture refusée (${d.erreur})`)); continue; }
+    for (const pr of d.prs || []) {
+      const li = el('li', 'pl-item');
+      const age = pr.ouverte_le ? PC.jours(String(pr.ouverte_le).slice(0, 10), PC.aujourdhui()) : null;
+      const a = el('a', 'pl-titre', `n° ${pr.numero} · ${pr.titre}`);
+      if (/^https:\/\/github\.com\//.test(pr.url || '')) { a.href = pr.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      const corps = el('div', 'pl-corps');
+      corps.append(a, el('div', 'pl-meta', `${noms.get(d.projet_id) || d.projet_id} · ${d.depot}${age !== null ? ` · ouverte il y a ${age} j` : ''}${pr.brouillon ? ' · brouillon' : ''}`));
+      li.append(el('span', 'pl-ref', 'PR'), corps);
+      lignes.push(li);
+    }
+    for (const e of d.echecs || []) lignes.push(ligneAlerte(`${d.depot} : échec de « ${e.nom} » le ${jourLisible(String(e.date).slice(0, 10), fmtJourCourt)}`));
+  }
+  n.replaceChildren(...(lignes.length ? lignes : [el('p', 'hud-empty', 'Aucune pull request ouverte, aucun échec sur 7 jours.')]));
+});
+
+// ---------- Briefing : ce qui a changé, revue, alertes nouvelles ----------
+dash.draw('s-changements', (n) => {
+  if (statut('syntheses') !== 'ok') { n.replaceChildren(); return; }
+  const items = lignesTexte(synth0(dash.data('syntheses').data).changements);
+  vide(n, !items.length);
+  n.replaceChildren(...items.map((t) => el('li', null, t)));
+});
+
+dash.draw('s-revue', (n) => {
+  if (statut('syntheses') !== 'ok') { n.replaceChildren(); return; }
+  const recentes = (dash.data('syntheses').data || []).filter((s) => s.revue && s.date && PC.jours(s.date, PC.aujourdhui()) <= 7);
+  const r = recentes[0];
+  vide(n, !r);
+  if (!r) { n.replaceChildren(); return; }
+  n.replaceChildren(el('p', 'pl-revue-date', 'Revue du ' + jourLisible(r.date, fmtJourLong)), ...lignesTexte(r.revue).map((t) => el('p', 'pl-revue-l', t)));
+});
+
+dash.draw('s-alertes', (n) => {
+  if (statut('syntheses') !== 'ok') { n.replaceChildren(); return; }
+  const s = dash.data('syntheses').data || [];
+  const items = lignesTexte(synth0(s).alertes);
+  const nouvelles = PC.alertesNouvelles(synth0(s).alertes, s[1] ? s[1].alertes : null);
+  const anim = mouvement() && premiereFois('s-alertes');
+  n.replaceChildren(...(items.length ? items : ['Rien à signaler.']).map((t, i) => {
+    const li = el('li', anim ? 'hud-in' : null);
+    if (anim) li.style.animationDelay = (0.25 + i * 0.12) + 's';
+    if (nouvelles.has(t)) li.append(el('span', 'pl-nouveau', 'Nouveau'));
+    const m = /\(\s*(\d+)\s*(e|er|ème)?\s*jour\s*\)/i.exec(t);
+    if (m) {
+      li.append(document.createTextNode(t.slice(0, m.index)), el('span', 'pl-compteur', m[0].replace(/[()]/g, '')), document.createTextNode(t.slice(m.index + m[0].length)));
+    } else li.append(document.createTextNode(t));
+    return li;
+  }));
+});
+
+// ---------- Gouvernance ----------
+const finPhrase = (t) => String(t).replace(/\.\.$/, '.');
+const tuile = (label, valeur, sous, alerte) => {
+  const d = el('div', 'pl-tuile' + (alerte ? ' pl-tuile-alerte' : ''));
+  d.append(el('div', 'hud-pod-label', label), el('div', 'pl-tuile-val', valeur));
+  (Array.isArray(sous) ? sous : [sous]).filter(Boolean).forEach((x) => d.append(el('div', 'pl-tuile-sous', finPhrase(x))));
+  return d;
+};
+
+dash.draw('gouv', (n) => {
+  const s = statut('gouv', 'liste_resume');
+  if (s !== 'ok') { n.replaceChildren(messageEtat(s)); return; }
+  const g = kpi0(dash.data('gouv').data), r = kpi0(dash.data('liste_resume').data);
+  const nom = (p) => p.nom_court || p.projet;
+  const dp = r.decision_plus_ancienne;
+  const tuiles = [
+    tuile('Projets ouverts', `${g.ouverts.length} / ${g.plafond}`, [g.ouverts.map(nom).join(', ') || '—', g.depasse ? `Plafond dépassé de ${g.ouverts.length - g.plafond} : un projet à mettre en pause ?` : 'Dans le plafond.'], g.depasse),
+    tuile('Décisions qui t’attendent', String(g.decisions_liste.length + g.attente.filter((p) => !g.decisions_liste.some((a) => a.projet_id === p.id)).length),
+      dp ? `La plus ancienne : ${dp.titre} (${dp.projet_nom}), ouverte il y a ${dp.age} j.` : 'Aucune.', dp && dp.age > 7),
+    tuile('Recommandation ≠ décision', String(g.ecarts.length), g.ecarts.map((e) => `${nom(e.projet)} : tu as décidé ${e.projet.decision}${e.decision ? ' le ' + jourLisible(e.decision.date, fmtJourCourt) : ''}, le rapport propose ${e.projet.recommandation}${e.depuis !== null ? ` (${e.depuis} j)` : ''}.`), g.ecarts.length > 0),
+    tuile('Décisions à revoir', String(g.a_revoir.length), g.a_revoir.length ? g.a_revoir.map((d) => `${d.titre} : revue prévue le ${jourLisible(d.revue, fmtJourCourt)}.`) : g.prochaine_revue ? `Prochaine revue le ${jourLisible(g.prochaine_revue.revue, fmtJourCourt)} (${g.prochaine_revue.titre}).` : 'Aucune revue prévue.', g.a_revoir.length > 0),
+  ];
+  const ouverts = g.ouverts.length;
+  const pied = el('p', 'hud-note pl-gouv-pied');
+  pied.textContent = `Objectif de revenu fixé : ${ouverts - g.sans_objectif.length} projet${ouverts - g.sans_objectif.length > 1 ? 's' : ''} ouvert${ouverts - g.sans_objectif.length > 1 ? 's' : ''} sur ${ouverts}. Critère d’arrêt : ${ouverts - g.sans_critere.length} sur ${ouverts}.`
+    + (g.criteres_echus.length ? ` Critère à vérifier aujourd’hui : ${g.criteres_echus.map(nom).join(', ')}.` : '')
+    + ` Capital en jeu sur les projets ouverts : ${euros(g.capital)}.` + (g.couts ? ` Coûts mensuels suivis : ${euros(g.couts)}.` : ' Coûts mensuels : pas encore relevés.');
+  const grille = el('div', 'pl-tuiles');
+  grille.append(...tuiles);
+  n.replaceChildren(grille, pied);
+});
+
+const ETAT_SOURCE = { ok: ['à jour', C.ok], vieux: ['ancien', C.warn], attente: ['pas encore de relevé', C.muted], eteint: ['éteint', C.pause], erreur: ['erreur', C.bad] };
+dash.draw('sources', (n) => {
+  if (statut('meta', 'syntheses') !== 'ok') { n.replaceChildren(); return; }
+  const meta = meta0();
+  const liste = PC.sources({ syntheses: dash.data('syntheses').data, mesures: dash.data('mesures').data, revenus: dash.data('revenus').data,
+    suivi: kpi0(dash.data('suivi').data), connexions: meta.connexions, bases: meta.bases });
+  const syn = synth0(dash.data('syntheses').data);
+  const fiab = syn.indicateurs && syn.indicateurs.fiabilite;
+  const nonVerif = lignesTexte(syn.alertes).filter((l) => /non v[ée]rifiable|refus[ée]|inaccessible|illisible/i.test(l)).length;
+  const ul = el('ul', 'pl-sources');
+  for (const s of liste) {
+    const [lib, col] = ETAT_SOURCE[s.etat] || ETAT_SOURCE.attente;
+    const li = el('li');
+    const d = el('i', 'hud-dot'); d.style.background = col; d.style.boxShadow = `0 0 8px ${col}`;
+    li.append(d, el('span', 'pl-source-nom', s.nom), el('span', 'pl-source-etat', lib + (s.date ? ' · ' + jourLisible(s.date, fmtJourCourt) : '') + (s.note ? ' · ' + s.note : '')));
+    ul.appendChild(li);
+  }
+  const tete = el('p', 'hud-note');
+  tete.textContent = typeof fiab === 'number' ? `Fiabilité du rapport du jour : ${fiab} % des sources lues.` : nonVerif ? `Rapport du jour : ${nonVerif} point${nonVerif > 1 ? 's' : ''} non vérifiable${nonVerif > 1 ? 's' : ''} signalé${nonVerif > 1 ? 's' : ''}.` : 'Rapport du jour : aucune source signalée comme illisible.';
+  n.replaceChildren(tete, ul);
+});
+
+// Simulateur : « si je mets en pause… » (rien n'est écrit).
+PP.pauses = new Set();
+dash.draw('simulateur', (n) => {
+  const s = statut('projets', 'liste');
+  if (s !== 'ok') { n.replaceChildren(messageEtat(s)); return; }
+  const projets = dash.data('projets').data, l = dash.data('liste').data;
+  const ouverts = projets.filter(PC.ouvert);
+  for (const id of [...PP.pauses]) if (!ouverts.some((p) => p.id === id)) PP.pauses.delete(id);
+  const avant = PC.simuler(projets, l, new Set()), apres = PC.simuler(projets, l, PP.pauses);
+  const puces = el('div', 'pl-simu-puces');
+  for (const p of ouverts) {
+    const b = el('button', 'hud-seg-b pl-simu-b', p.nom_court || p.projet);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(PP.pauses.has(p.id)));
+    b.addEventListener('click', () => { if (PP.pauses.has(p.id)) PP.pauses.delete(p.id); else PP.pauses.add(p.id); dash.draw('simulateur'); });
+    puces.appendChild(b);
+  }
+  const fl = (a, b, f = (x) => x) => (a === b ? String(f(a)) : `${f(a)} → ${f(b)}`);
+  const res = el('dl', 'hud-kv pl-simu-res');
+  const ligne = (k, v) => { res.append(el('dt', null, k), el('dd', null, v)); };
+  ligne('Projets ouverts', fl(avant.ouverts, apres.ouverts) + ` (plafond ${plafondProjets()})`);
+  ligne('Actions qui t’attendent', fl(avant.actions, apres.actions) + (apres.liberees ? ` (${apres.liberees} libérée${apres.liberees > 1 ? 's' : ''})` : ''));
+  ligne('Retard cumulé', fl(avant.retard, apres.retard, (x) => x + ' j'));
+  ligne('Capital en jeu', fl(avant.capital, apres.capital, euros));
+  n.replaceChildren(el('p', 'hud-note', PP.pauses.size ? 'Projets mis en pause dans la simulation :' : 'Touche un projet pour simuler sa mise en pause. Rien n’est enregistré : pour décider, dis-le à Geri.'), puces, res);
+});
+
+// ---------- Traction dans les fiches ----------
+const sparkline = (serie, couleur) => {
+  const W = 120, H = 28;
+  const svg = d3.create('svg').attr('class', 'pl-spark').attr('viewBox', `0 0 ${W} ${H}`).attr('width', W).attr('height', H).attr('role', 'img')
+    .attr('aria-label', 'Évolution : ' + serie.map((m) => `${jourLisible(m.date, fmtJourCourt)} ${m.valeur}`).join(', '));
+  const x = d3.scaleUtc(d3.extent(serie, (m) => parseJour(m.date)), [2, W - 2]);
+  const ext = d3.extent(serie, (m) => m.valeur);
+  const y = d3.scaleLinear(ext[0] === ext[1] ? [ext[0] - 1, ext[1] + 1] : ext, [H - 3, 3]);
+  svg.append('path').attr('d', d3.line().x((m) => x(parseJour(m.date))).y((m) => y(m.valeur))(serie)).style('fill', 'none').style('stroke', couleur).style('stroke-width', 1.6);
+  const d = serie[serie.length - 1];
+  svg.append('circle').attr('cx', x(parseJour(d.date))).attr('cy', y(d.valeur)).attr('r', 2.6).style('fill', couleur);
+  return svg.node();
+};
+
+function blocTraction(p, couleur) {
+  const tr = PC.traction(p, dash.data('mesures').data || []);
+  if (!tr.cle && !tr.etapes.length) return null;
+  const bloc = el('div', 'pl-trac');
+  if (tr.cle) {
+    const tete = el('div', 'pl-trac-tete');
+    tete.append(el('span', 'pl-trac-nom', tr.cle), el('b', 'pl-trac-val', tr.derniere ? valeurMesure(tr.cle, tr.derniere.valeur) : '—'));
+    if (tr.cible !== null) tete.append(el('span', 'pl-trac-cible', (tr.descend ? 'objectif ' : '/ ') + valeurMesure(tr.cle, tr.cible)));
+    bloc.appendChild(tete);
+    if (tr.progression !== null) {
+      const t = el('div', 'hud-track pl-trac-barre');
+      const i = el('i'); i.style.width = (tr.progression * 100).toFixed(1) + '%';
+      t.appendChild(i);
+      bloc.appendChild(t);
+    }
+    const bas = el('div', 'pl-trac-bas');
+    if (tr.serie.length >= 2) bas.appendChild(sparkline(tr.serie, couleur));
+    const sous = [];
+    if (tr.derniere) sous.push('relevé du ' + jourLisible(tr.derniere.date, fmtJourCourt));
+    else sous.push('pas encore de relevé');
+    if (p.premier_euro) sous.push('premier euro estimé : ' + p.premier_euro);
+    else if (tr.projection) sous.push('à ce rythme, cible le ' + jourLisible(tr.projection));
+    else if (tr.horizon) sous.push('à ce rythme : ' + tr.horizon);
+    else if (tr.derniere) sous.push('tendance dès 3 jours de relevés');
+    bas.appendChild(el('span', 'pl-trac-sous', sous.join(' · ')));
+    bloc.appendChild(bas);
+  }
+  if (tr.etapes.length) {
+    const ent = el('div', 'pl-ent');
+    for (const e of tr.etapes) {
+      const c = el('div', 'pl-ent-etape');
+      c.appendChild(el('span', 'pl-ent-nom', e.etape));
+      e.mesures.slice(0, 3).forEach((m) => c.appendChild(el('span', 'pl-ent-m', `${m.indicateur} : ${valeurMesure(m.indicateur, m.valeur)}`)));
+      ent.appendChild(c);
+    }
+    bloc.appendChild(ent);
+  }
+  return bloc;
+}

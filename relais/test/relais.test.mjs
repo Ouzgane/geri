@@ -296,7 +296,8 @@ test('projets : lecture en direct des fiches Notion, jeton requis', async () => 
     assert.equal(r.headers.get('Cache-Control'), 'no-store');
     assert.equal(j.projets.length, 2);
     assert.deepEqual(j.projets[0], { nom: 'Trader 5.0', url: 'https://www.notion.so/p1', modifie_le: '2026-11-10T08:06:57.000Z', decision: null, statut: 'En pause', objectif_mensuel: null, prochaine_etape: 'Décider de la suite', echeance: null, blocages: '', resume: 'Plateforme',
-      avancement: 35, etape: 'Construction', dynamique: null, recommandation: null, potentiel: null, effort: null, automatisations: null, derniere_activite: '2026-09-29', modele_revenu: '', pole: null, lien: 'https://claude.ai/artifact/x', fait: '', risques: '' });
+      avancement: 35, etape: 'Construction', dynamique: null, recommandation: null, potentiel: null, effort: null, automatisations: null, derniere_activite: '2026-09-29', modele_revenu: '', pole: null, lien: 'https://claude.ai/artifact/x', fait: '', risques: '',
+      critere_arret: '', date_critere: null, couts_mensuels: null, capital: null, id: null, indicateur_cle: '', cible: null, premier_euro: '' });
     assert.deepEqual(j.rapports, []);
     assert.equal(j.projets[1].decision, 'Accélérer');
     assert.equal(j.projets[1].echeance, '2026-11-20');

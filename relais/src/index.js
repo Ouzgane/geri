@@ -2,17 +2,35 @@
 // POST /discuter  { messages: [{ role, content }], contexte, nom }  →  { reponse, suggestions, fournisseur, modele }
 // GET  /          état du relais (fournisseur et modèle actifs), sans aucune donnée.
 // GET  /projets   fiches Notion et rapports du matin, lus en direct (jeton requis).
-// POST /notion    mise à jour d'une fiche, confirmée par l'utilisateur (jeton requis).
+// POST /notion    mise à jour d'une fiche, confirmée par l'utilisateur (jeton requis) ; une décision
+//                 confirmée est aussi inscrite au journal des décisions.
+// POST /action    une action de « Ta liste » passe à Fait (ou revient à faire), au clic (jeton requis).
+// GET  /suivi     GitHub en lecture : pull requests ouvertes, dernier commit, échecs (jeton requis).
+// POST /releve    relève l'audience Plausible tout de suite (jeton requis) ; sinon chaque matin à 5 h 17 UTC.
+// POST /payhip    webhook signé de Payhip : une vente ou un remboursement va dans la base Revenus.
 
 import { appeler, decrireFournisseur, ErreurConfig, ErreurQuota } from './fournisseurs.js';
 import { consignes, analyser, validerNotion } from './consignes.js';
-import { ecrireNotion, lireProjets, lireRapports, ErreurNotion } from './notion.js';
+import { ecrireNotion, lireProjets, lireRapports, lireMesures, lireActions, lireDecisions, lireRevenus, majAction, creerDecision, ErreurNotion } from './notion.js';
+import { recevoirPayhip } from './payhip.js';
+import { releverPlausible } from './releve.js';
+import { suiviGithub } from './github.js';
 
 const LIMITES = { corps: 96000, historique: 14, message: 2000, contexte: 30000 };
 
 export default {
+  // Relevé du matin (déclencheur programmé de wrangler.toml), avant le rapport de 7 h 47.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(releverPlausible(env).then((r) => console.log('releve', JSON.stringify(r))).catch((e) => console.error('releve', e && (e.stack || e.message || e))));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Webhook de Payhip : appel de serveur à serveur, authentifié par sa signature.
+    if (url.pathname === '/payhip') {
+      if (request.method !== 'POST') return json({ erreur: 'Méthode non autorisée.' }, 405);
+      return recevoirPayhip(request, env);
+    }
     const origine = request.headers.get('Origin');
     const cors = entetesCors(origine, env);
 
@@ -33,12 +51,24 @@ export default {
       if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
       if (!env.NOTION_CLE || !env.NOTION_SOURCE) return json({ erreur: 'Notion n’est pas encore branché.' }, 501, cors);
       try {
-        const [projets, rapports] = await Promise.all([
+        // Les bases autres que Projets sont un plus : illisibles, elles ne bloquent pas les fiches.
+        const facultatif = (base, lecture, nom) => (base ? lecture(env).catch((e) => { console.error('notion ' + nom, e && e.message); return null; }) : Promise.resolve(undefined));
+        const [projets, rapports, mesures, actions, decisions, revenus] = await Promise.all([
           lireProjets(env),
-          // Les rapports du matin sont un plus : s'ils sont illisibles, les fiches restent servies.
           env.NOTION_RAPPORTS ? lireRapports(env).catch((e) => { console.error('notion rapports', e && e.message); return null; }) : Promise.resolve([]),
+          facultatif(env.NOTION_MESURES, lireMesures, 'mesures'),
+          facultatif(env.NOTION_ACTIONS, lireActions, 'actions'),
+          facultatif(env.NOTION_DECISIONS, lireDecisions, 'decisions'),
+          facultatif(env.NOTION_REVENUS, lireRevenus, 'revenus'),
         ]);
-        return json({ projets, rapports: rapports || [], rapports_ok: rapports !== null, lu_le: new Date().toISOString() }, 200, cors);
+        const etat = (v) => (v === undefined ? 'absent' : v === null ? 'erreur' : 'ok');
+        return json({
+          projets, rapports: rapports || [], rapports_ok: rapports !== null,
+          mesures: mesures || [], actions: actions || [], decisions: decisions || [], revenus: revenus || [],
+          bases: { mesures: etat(mesures), actions: etat(actions), decisions: etat(decisions), revenus: etat(revenus) },
+          connexions: { payhip: !!env.PAYHIP_CLE, plausible: !!env.PLAUSIBLE_CLE, github: !!env.GITHUB_LECTURE },
+          lu_le: new Date().toISOString(),
+        }, 200, cors);
       } catch (e) {
         console.error('notion', e && (e.stack || e.message || e));
         if (e instanceof ErreurNotion) return json({ erreur: e.message }, e.statut || 502, cors);
@@ -48,6 +78,28 @@ export default {
     if (url.pathname === '/notion' && request.method === 'POST') {
       if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
       return enregistrerNotion(request, env, cors);
+    }
+    if (url.pathname === '/action' && request.method === 'POST') {
+      if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
+      if (!env.NOTION_CLE || !env.NOTION_ACTIONS) return json({ erreur: 'La base Actions n’est pas branchée.' }, 501, cors);
+      let corps;
+      try { corps = JSON.parse((await request.text()).slice(0, 2000)); } catch (e) { return json({ erreur: 'Requête illisible.' }, 400, cors); }
+      try {
+        return json({ ok: true, ...(await majAction(env, corps && corps.id, corps && corps.statut)) }, 200, cors);
+      } catch (e) {
+        console.error('action', e && (e.message || e));
+        if (e instanceof ErreurNotion) return json({ erreur: e.message }, e.statut || 502, cors);
+        return json({ erreur: 'Notion n’a pas répondu.' }, 502, cors);
+      }
+    }
+    if (url.pathname === '/suivi' && request.method === 'GET') {
+      if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
+      if (!env.GITHUB_LECTURE) return json({ erreur: 'Suivi GitHub pas encore branché (secret GITHUB_LECTURE).' }, 501, cors);
+      return json(await suiviEnCache(env), 200, cors);
+    }
+    if (url.pathname === '/releve' && request.method === 'POST') {
+      if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
+      return json(await releverPlausible(env), 200, cors);
     }
     if (url.pathname !== '/discuter') return json({ erreur: 'Adresse inconnue.' }, 404, cors);
     if (request.method !== 'POST') return json({ erreur: 'Méthode non autorisée.' }, 405, cors);
@@ -77,15 +129,16 @@ export default {
       const maxTokens = Math.min(Math.max(parseInt(env.MAX_TOKENS, 10) || 1200, 200), 4000);
       const playlists = Array.isArray(corps.playlists) ? corps.playlists.slice(0, 20).filter((p) => p && /^[a-z0-9-]{1,30}$/.test(p.cle)).map((p) => ({ cle: p.cle, nom: String(p.nom || p.cle).slice(0, 40) })) : [];
       const notion = !!(env.NOTION_CLE && env.NOTION_SOURCE);
-      const requete = { systeme: consignes({ nom, date, contexte, playlists, notion }), messages, maxTokens };
+      const requete = { systeme: consignes({ nom, date, contexte, playlists, notion, liste: notion && !!env.NOTION_ACTIONS }), messages, maxTokens };
       const brut = await appeler(cfg, requete, env);
-      const { texte, suggestions, musique, actions } = analyser(brut);
+      const { texte, suggestions, musique, actions, faits } = analyser(brut);
       const cles = new Set(playlists.map((p) => p.cle));
       return json({
         reponse: texte || (notion && actions.length ? 'Voici ce que je te propose d’enregistrer dans Notion. Confirme pour que je l’écrive.' : 'C’est noté.'),
         suggestions,
         musique: musique && (musique === 'stop' || cles.has(musique)) ? musique : null,
         actions: notion ? actions : [],
+        faits: notion && env.NOTION_ACTIONS ? faits : [],
         fournisseur: cfg.nom,
         modele: requete.modeleUtilise || cfg.modele,
       }, 200, cors);
@@ -103,17 +156,41 @@ async function enregistrerNotion(request, env, cors) {
   if (!env.NOTION_CLE || !env.NOTION_SOURCE) return json({ erreur: 'Notion n’est pas encore branché : ajoute le secret NOTION_CLE.' }, 501, cors);
   let corps;
   try { corps = JSON.parse((await request.text()).slice(0, 20000)); } catch (e) { return json({ erreur: 'Requête illisible.' }, 400, cors); }
-  const action = validerNotion({ projet: corps && corps.projet, ...((corps && corps.champs) || {}) });
+  const action = validerNotion({ projet: corps && corps.projet, ...((corps && corps.champs) || {}), ...((corps && corps.journal) || {}) });
   const nomProjet = typeof corps.projet_nom === 'string' ? corps.projet_nom.trim().slice(0, 200) : '';
   if (!action || !nomProjet) return json({ erreur: 'Mise à jour incomplète.' }, 400, cors);
   try {
     const page = await ecrireNotion(env, nomProjet, action.champs);
-    return json({ ok: true, url: page.url, champs: action.champs }, 200, cors);
+    // Une décision confirmée entre au journal des décisions ; un échec ici ne défait pas la fiche.
+    let journal = null;
+    if (action.champs.decision && env.NOTION_DECISIONS) {
+      try {
+        const d = await creerDecision(env, { page, projetId: action.projet, projetNom: nomProjet, choix: action.champs.decision, ...(action.journal || {}) });
+        journal = { ok: true, url: d.url };
+      } catch (e) {
+        console.error('journal', e && (e.message || e));
+        journal = { ok: false, erreur: e instanceof ErreurNotion ? e.message : 'Journal des décisions injoignable.' };
+      }
+    }
+    return json({ ok: true, url: page.url, champs: action.champs, journal }, 200, cors);
   } catch (e) {
     console.error('notion', e && (e.stack || e.message || e));
     if (e instanceof ErreurNotion) return json({ erreur: e.message }, e.statut || 502, cors);
     return json({ erreur: 'Notion n’a pas répondu. Réessaie dans un instant.' }, 502, cors);
   }
+}
+
+// Le suivi GitHub est gardé 10 minutes : le site le redemande à chaque synchronisation.
+async function suiviEnCache(env) {
+  const cache = typeof caches !== 'undefined' && caches.default ? caches.default : null;
+  const cle = new Request('https://cache.larmina.invalid/suivi');
+  if (cache) {
+    const vu = await cache.match(cle).catch(() => null);
+    if (vu) return vu.json();
+  }
+  const suivi = await suiviGithub(env);
+  if (cache) await cache.put(cle, new Response(JSON.stringify(suivi), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=600' } })).catch(() => {});
+  return suivi;
 }
 
 // Garde les rôles utiles, fusionne les tours consécutifs du même rôle, commence par une question.

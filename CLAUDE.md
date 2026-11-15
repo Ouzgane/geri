@@ -14,3 +14,9 @@ Cette règle passe avant toutes les autres, « zéro dette » comprise.
 2. Ne reste ouvert que ce qui exige le porteur (mot de passe, code de vérification, IBAN, carte, paiement, décision qui lui revient) ou un tiers (validation, réponse d'un support). Les décisions sont posées au porteur tout de suite, pas notées pour plus tard.
 3. Chaque point ouvert est noté dans la note de suivi du projet avec sa raison exacte, l'action attendue et qui la fait.
 4. Avant de clore une tâche : relire ce qu'elle a touché à la recherche de « à faire », « plus tard », « à confirmer », valeurs provisoires et documentation périmée, et les solder.
+
+## Champs et bases du pilotage (15 novembre 2026)
+- Au porteur seulement : Décision, Statut, Objectif revenu mensuel, Critère d'arrêt et Date du critère (base Projets). Claude ne les remplit jamais ; Geri les propose seulement quand le porteur les dicte, et il confirme.
+- Bases sous « Pilotage des projets » : Projets, Rapports du matin, Mesures, Actions (« Ta liste »), Décisions (journal), Revenus. Le relais écrit dans Mesures (Plausible), Revenus (webhook Payhip signé), Actions (clic « C'est fait ») et Décisions (décision confirmée).
+- Les connexions (Plausible, GitHub, Payhip) lisent les projets sans jamais y écrire. Régler un compte de projet (webhook Payhip, comptes de réseaux) reste une action du porteur, notée dans la fiche du projet.
+

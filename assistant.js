@@ -52,7 +52,7 @@
   }
 
   // ── Contexte transmis au modèle : un résumé lisible des données déchiffrées ──
-  const eur = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' €';
+  const eur = (n) => { const c = Number.isInteger(Number(n)) ? 0 : 2; return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: c, maximumFractionDigits: c }).format(n) + ' €'; };
   const montant = (r) => { const n = parseFloat(String(r && r.montant != null ? r.montant : '').replace(/[\s  ]/g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
   const court = (v, n) => { const s = String(v).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
   const parDate = (a, b) => String(a.date || '').localeCompare(String(b.date || ''));
@@ -90,7 +90,47 @@
       if (dernier && dernier.risques && dernier.risques !== x.blocages) L.push(`  Risques : ${court(dernier.risques, 400)}`);
       if (siens.length > 1) L.push('  Trajectoire : ' + siens.slice(-6).map((r) => `${r.date} ${r.avancement} %`).join(' → '));
     });
-    return L.join('\n').slice(0, 28000);
+    // Pilotage (bases Notion du 15/11/2026) : ta liste, traction, décisions, sources.
+    const PC = window.PILOTAGE_CALCULS;
+    if (PC) {
+      const l = PC.liste(p.actions || [], projets);
+      const r = PC.resumeListe(l);
+      const g = PC.gouvernance(projets, p.decisions || [], l, { plafond: Number(CFG.plafondProjets) || 3 });
+      if (s && (s.changements || s.revue)) {
+        if (s.changements) L.push('', 'CE QUI A CHANGÉ DEPUIS HIER', ...String(s.changements).split('\n').filter(Boolean).map((x) => '- ' + court(x, 300)));
+        if (s.revue) L.push('', 'REVUE DE LA SEMAINE', court(s.revue, 1500));
+      }
+      L.push('', `TA LISTE (actions à faire ; ${r.toi} attendent l’utilisateur, ${r.en_retard} en retard, retard cumulé ${r.retard_cumule} jours)`);
+      l.slice(0, 40).forEach((a) => L.push(`- ${a.ref} · ${a.projet_nom} · ${a.qui || '?'} · ${a.impact || '?'} · ${court(a.titre, 160)}${a.echeance ? ' · échéance ' + a.echeance : ''}${a.retard ? ` · ${a.retard} j de retard` : ''}${a.ouverte ? ' · ouverte le ' + a.ouverte : ''}${a.ou ? ' · où : ' + court(a.ou, 120) : ''}`));
+      const faites = PC.faites(p.actions || [], projets).slice(0, 8);
+      if (faites.length) L.push('Fait récemment : ' + faites.map((a) => `${court(a.titre, 80)} (${a.projet_nom}, ${a.faite})`).join(' ; '));
+      L.push('', 'TRACTION (relevés datés de la base Mesures)');
+      projets.forEach((x) => {
+        const t = PC.traction(x, p.mesures || []);
+        if (!t.cle && !t.etapes.length) return;
+        const parts = [];
+        if (t.cle) parts.push(`indicateur clé ${t.cle} = ${t.derniere ? t.derniere.valeur + ' (' + t.derniere.date + ')' : 'pas encore relevé'}${t.cible !== null ? ', cible ' + t.cible : ''}${t.projection ? ', cible atteinte vers le ' + t.projection + ' à ce rythme' : t.horizon ? ', à ce rythme : ' + t.horizon : ''}`);
+        t.etapes.forEach((e) => parts.push(`${e.etape} : ` + e.mesures.map((m) => `${m.indicateur} ${m.valeur} (${m.date}, ${m.source || '?'})`).join(', ')));
+        if (x.premier_euro) parts.push('premier euro estimé : ' + x.premier_euro);
+        L.push(`- ${x.nom_court || x.projet} : ${court(parts.join(' ; '), 600)}`);
+      });
+      L.push('', 'GOUVERNANCE', `Projets ouverts : ${g.ouverts.length} pour un plafond de ${g.plafond} (${g.ouverts.map((x) => x.nom_court || x.projet).join(', ')}).`);
+      g.ecarts.forEach((e) => L.push(`- Écart : ${e.projet.nom_court || e.projet.projet}, décision ${e.projet.decision}${e.decision ? ' du ' + e.decision.date : ''}, recommandation ${e.projet.recommandation}.`));
+      g.a_revoir.forEach((d) => L.push(`- Décision à revoir depuis le ${d.revue} : ${d.titre}${d.raison ? ' (raison : ' + court(d.raison, 160) + ')' : ''}${d.attendu ? ' ; attendu : ' + court(d.attendu, 160) : ''}.`));
+      projets.forEach((x) => {
+        const f = [];
+        if (x.critere_arret) f.push(`critère d’arrêt : ${court(x.critere_arret, 160)}${x.date_critere ? ' (le ' + x.date_critere + ')' : ''}`);
+        if (typeof x.capital === 'number') f.push('capital en jeu ' + eur(x.capital));
+        if (typeof x.couts_mensuels === 'number') f.push('coûts mensuels ' + eur(x.couts_mensuels));
+        if (f.length) L.push(`- ${x.nom_court || x.projet} : ${f.join(' ; ')}`);
+      });
+      const journal = (p.decisions || []).slice(0, 12);
+      if (journal.length) L.push('', 'JOURNAL DES DÉCISIONS (récentes)', ...journal.map((d) => `- ${d.date} · ${d.titre}${d.raison ? ' · raison : ' + court(d.raison, 140) : ''}${d.revue ? ' · revoir le ' + d.revue : ''}${d.bilan ? ' · bilan : ' + court(d.bilan, 140) : ''}`));
+      const suivi = p.suivi && Array.isArray(p.suivi.depots) ? p.suivi.depots : [];
+      const prs = suivi.flatMap((d) => (d.prs || []).map((pr) => `${d.depot} n° ${pr.numero} « ${court(pr.titre, 80)} » ouverte le ${String(pr.ouverte_le || '').slice(0, 10)}`));
+      if (prs.length) L.push('', 'PULL REQUESTS OUVERTES (GitHub, lecture seule)', ...prs.slice(0, 15).map((x) => '- ' + x));
+    }
+    return L.join('\n').slice(0, 29000);
   }
 
   // ── Voix ─────────────────────────────────────────────────────────────────────
@@ -407,6 +447,7 @@
     envoyer.disabled = true;
     statut('Analyse en cours…', 'ia-etat-actif');
     const att = attente();
+    const listeEnvoyee = window.PILOTAGE_CALCULS ? window.PILOTAGE_CALCULS.liste(donnees.actions || [], donnees.projets || []) : [];
     let rep = null, corps = null;
     try {
       await jetonPret;
@@ -426,6 +467,7 @@
         if (corps.musique === 'stop') window.GERI_MUSIQUE.arreter(); else window.GERI_MUSIQUE.jouer(corps.musique);
       }
       ((corps && corps.actions) || []).forEach(proposerNotion);
+      ((corps && corps.faits) || []).forEach((f) => proposerFait(f, listeEnvoyee));
       puces((corps && corps.suggestions) || []);
       if (corps && corps.modele) modele.textContent = libelleModele(corps.fournisseur, corps.modele);
       statut('En ligne', 'ia-etat-ok');
@@ -444,9 +486,11 @@
   }
 
   // ── Mises à jour Notion proposées par Geri, écrites seulement après confirmation ──
-  const LIBELLES = { decision: 'Décision', statut: 'Statut', prochaine_etape: 'Prochaine étape', echeance: 'Échéance', blocages: 'Blocages', resume: 'Résumé' };
+  const LIBELLES = { decision: 'Décision', statut: 'Statut', prochaine_etape: 'Prochaine étape', echeance: 'Échéance', blocages: 'Blocages', resume: 'Résumé',
+    objectif_mensuel: 'Objectif mensuel', critere_arret: 'Critère d’arrêt', date_critere: 'Date du critère', raison: 'Raison', attendu: 'Résultat attendu', revue: 'À revoir le' };
   function valeurLisible(cle, v) {
-    if (cle === 'echeance' && /^\d{4}-\d{2}-\d{2}$/.test(v)) { const [a, m, j] = v.split('-'); return `${+j} ${MOIS[+m - 1]} ${a}`; }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) { const [a, m, j] = String(v).split('-'); return `${+j} ${MOIS[+m - 1]} ${a}`; }
+    if (cle === 'objectif_mensuel' && typeof v === 'number') return eur(v) + ' par mois';
     return v;
   }
   function proposerNotion(action) {
@@ -457,7 +501,9 @@
     const t = document.createElement('b');
     t.textContent = p.projet;
     const ul = document.createElement('ul');
-    Object.entries(action.champs).forEach(([cle, v]) => {
+    const revueDefaut = action.champs.decision && !(action.journal && action.journal.revue) && window.PILOTAGE_CALCULS
+      ? { revue: window.PILOTAGE_CALCULS.ajouterJours(window.PILOTAGE_CALCULS.aujourdhui(), 14) } : {};
+    Object.entries({ ...action.champs, ...(action.journal || {}), ...revueDefaut }).forEach(([cle, v]) => {
       const it = document.createElement('li');
       const l = document.createElement('span');
       l.className = 'ia-action-cle';
@@ -487,7 +533,7 @@
         const r = await fetch(RELAIS + '/notion', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jeton },
-          body: JSON.stringify({ projet: p.id, projet_nom: p.projet, champs: action.champs }),
+          body: JSON.stringify({ projet: p.id, projet_nom: p.projet, champs: action.champs, journal: action.journal || {} }),
         });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
@@ -508,6 +554,68 @@
         }
         li.classList.add('ia-action-fini');
         emettre('presente', { id: 'projet-' + p.id });
+      } catch (e) {
+        ok.disabled = non.disabled = false;
+        ok.textContent = 'Réessayer';
+        let err = boutons.querySelector('.ia-action-err');
+        if (!err) { err = document.createElement('span'); err.className = 'ia-action-err'; boutons.appendChild(err); }
+        err.textContent = e.message === 'Failed to fetch' ? 'Relais injoignable.' : e.message;
+      }
+    });
+  }
+
+  // ── Ta liste : cocher une action (bouton du tableau ou carte proposée par Geri) ──
+  async function cocher(id, statutCible) {
+    if (!RELAIS) throw new Error('Relais non déployé.');
+    await jetonPret;
+    if (!jeton) throw new Error('Accès non prêt.');
+    const r = await fetch(RELAIS + '/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + jeton },
+      body: JSON.stringify({ id, statut: statutCible }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
+    const a = (donnees.actions || []).find((x) => x.id === id);
+    if (a) { a.statut = statutCible; a.faite = statutCible === 'Fait' && window.PILOTAGE_CALCULS ? window.PILOTAGE_CALCULS.aujourdhui() : null; }
+    contexteTexte = construireContexte(donnees);
+    if (window.PILOTAGE && window.PILOTAGE.charger) window.PILOTAGE.charger(donnees);
+    synchroniserNotion(true);
+    return j;
+  }
+
+  function proposerFait(fait, liste) {
+    if (!fait || !fait.action) return;
+    const vue = (liste || []).find((x) => x.ref === fait.action);
+    // L'action doit être encore à faire : sinon, pas de carte.
+    const a = vue && (donnees.actions || []).some((x) => x.id === vue.id && x.statut === 'À faire') ? vue : null;
+    if (!a) return;
+    const { li, corps } = bulle('ia-msg-ia ia-msg-action', 'Ta liste');
+    const t = document.createElement('b');
+    t.textContent = `${a.ref} · ${a.projet_nom}`;
+    const d = document.createElement('p');
+    d.textContent = a.titre;
+    const boutons = document.createElement('div');
+    boutons.className = 'ia-action-boutons';
+    const ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'ia-action-ok'; ok.textContent = 'C’est fait';
+    const non = document.createElement('button');
+    non.type = 'button'; non.className = 'ia-action-non'; non.textContent = 'Ignorer';
+    boutons.append(ok, non);
+    corps.append(t, d, boutons);
+    defiler();
+    non.addEventListener('click', () => { boutons.replaceChildren(document.createTextNode('Ignoré : rien n’a été coché.')); li.classList.add('ia-action-fini'); });
+    ok.addEventListener('click', async () => {
+      ok.disabled = non.disabled = true;
+      ok.textContent = 'Enregistrement…';
+      try {
+        await cocher(a.id, 'Fait');
+        boutons.replaceChildren();
+        const fin = document.createElement('span');
+        fin.className = 'ia-action-ok-txt';
+        fin.textContent = '✓ Coché dans ta liste';
+        boutons.appendChild(fin);
+        li.classList.add('ia-action-fini');
       } catch (e) {
         ok.disabled = non.disabled = false;
         ok.textContent = 'Réessayer';
@@ -558,6 +666,7 @@
       + (accel.length ? ` Le rapport propose d’accélérer ${liste(accel)}.` : '')
       + (aDecider.length ? ` ${liste(aDecider)} ${aDecider.length > 1 ? 'attendent' : 'attend'} ta décision.` : '')
       + (aRevoir.length ? ` Il recommande autre chose que ta décision pour ${liste(aRevoir)}.` : '')
+      + relances(p, projets)
       + ' Que veux-tu examiner ?';
     ajouterAssistant(texte, { parle });
     const premieres = ['Résume-moi la situation du jour', 'Quel projet accélérer en priorité ?'];
@@ -567,6 +676,21 @@
     puces(premieres);
   }
   const decisionEnAttente = (d) => !d || d === 'À décider' || d === 'À arbitrer';
+  // Ce qui attend l'utilisateur et les décisions arrivées à leur date de revue.
+  function relances(p, projets) {
+    const PC = window.PILOTAGE_CALCULS;
+    if (!PC || !Array.isArray(p.actions) || !p.actions.length) return '';
+    const l = PC.liste(p.actions, projets), r = PC.resumeListe(l);
+    const g = PC.gouvernance(projets, p.decisions || [], l);
+    let t = '';
+    if (r.toi) {
+      t += ` ${r.toi} action${r.toi > 1 ? 's t’attendent' : ' t’attend'} dans ta liste`;
+      t += r.en_retard ? `, dont ${r.en_retard} en retard` : '';
+      t += r.plus_en_retard ? ` ; la plus en retard : ${r.plus_en_retard.titre.charAt(0).toLowerCase() + r.plus_en_retard.titre.slice(1)}, pour ${r.plus_en_retard.projet_nom}.` : '.';
+    }
+    if (g.a_revoir.length) t += ` ${g.a_revoir.length > 1 ? g.a_revoir.length + ' décisions sont' : 'Une décision est'} à revoir : ${g.a_revoir.slice(0, 2).map((d) => d.titre).join(', ')}.`;
+    return t;
+  }
   const liste = (l) => (l.length < 2 ? l.join('') : l.slice(0, -1).join(', ') + ' et ' + l[l.length - 1]);
 
   // ── Ouverture, fermeture, saisie ─────────────────────────────────────────────
@@ -679,6 +803,8 @@
   // Synchronisation avec Notion : le site reprend les décisions et les mises à jour
   // dès qu'elles y sont, qu'elles viennent de Geri ou d'une modification faite dans Notion.
   const normNom = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  // Champs qui n'existent que dans Notion : toujours repris tels quels.
+  const CHAMPS_PILOTAGE = ['indicateur_cle', 'cible', 'critere_arret', 'date_critere', 'couts_mensuels', 'capital', 'premier_euro'];
   const CHAMPS_NOTION = ['prochaine_etape', 'echeance', 'blocages', 'resume', 'avancement', 'etape', 'dynamique', 'recommandation',
     'potentiel', 'effort', 'automatisations', 'derniere_activite', 'modele_revenu', 'pole'];
   const TEXTES_NOTION = new Set(['prochaine_etape', 'blocages', 'resume']);
@@ -692,7 +818,7 @@
       const nouveau = !p;
       if (!p) {
         // Projet ajouté dans Notion depuis le dernier rapport : il apparaît tout de suite.
-        const base = normNom(f.nom).replace(/ /g, '-').slice(0, 40) || 'projet';
+        const base = (f.id && /^[a-z0-9-]{1,40}$/.test(f.id) ? f.id : normNom(f.nom).replace(/ /g, '-').slice(0, 40)) || 'projet';
         let id = base, n = 2;
         while (projets.some((q) => q.id === id)) id = base + '-' + n++;
         p = { id, projet: f.nom, nom_court: f.nom.length > 22 ? f.nom.slice(0, 21) + '…' : f.nom, decision: 'À décider', statut: null, recommandation: 'À arbitrer',
@@ -704,6 +830,7 @@
       }
       // Décision, statut et objectif : toujours ceux de Notion (« À décider » si la décision est vide).
       const maj = { decision: f.decision || 'À décider', statut: f.statut || null, objectif_mensuel: typeof f.objectif_mensuel === 'number' ? f.objectif_mensuel : null };
+      for (const k of CHAMPS_PILOTAGE) maj[k] = f[k] === undefined || f[k] === '' ? null : f[k];
       // Le reste : ce qu'il y a dans Notion si la fiche a été modifiée après la publication du rapport
       // (par toi, par Geri ou par le rapport du matin).
       if (nouveau || (Date.parse(f.modifie_le || '') || 0) > publieLe) {
@@ -732,9 +859,16 @@
       const recent = (Date.parse(r.modifie_le || '') || 0) > publieLe;
       const i = syntheses.findIndex((x) => x.date === r.date);
       if (i < 0 || recent) {
-        const s = { date: r.date, titre: r.titre || '', synthese: r.synthese || '', arbitrages: r.arbitrages || '', alertes: r.alertes || '' };
+        const s = { date: r.date, titre: r.titre || '', synthese: r.synthese || '', arbitrages: r.arbitrages || '', alertes: r.alertes || '',
+          changements: r.changements || '', revue: r.revue || '', indicateurs: r.indicateurs || null };
         if (i < 0) { syntheses.push(s); change = true; }
         else if (JSON.stringify(syntheses[i]) !== JSON.stringify(s)) { syntheses[i] = s; change = true; }
+      } else {
+        // Ce qui a changé, revue et indicateurs n'existent que dans Notion : toujours repris.
+        const x = syntheses[i];
+        for (const [k, v] of [['changements', r.changements || ''], ['revue', r.revue || ''], ['indicateurs', r.indicateurs || null]]) {
+          if (JSON.stringify(x[k] ?? (k === 'indicateurs' ? null : '')) !== JSON.stringify(v)) { x[k] = v; change = true; }
+        }
       }
       for (const p of donnees.projets || []) {
         const av = r.avancements && r.avancements[p.id];
@@ -758,13 +892,32 @@
     if (avecRevenus) {
       const noms = new Map((donnees.projets || []).map((p) => [p.id, p.projet]));
       const neufs = avecRevenus.encaissements.map((e) => ({ date: e.date, projet_id: e.projet_id, projet: noms.get(e.projet_id) || e.projet_id, montant: e.montant, type: e.type || '', note: e.note || '' }));
-      if (JSON.stringify(neufs) !== JSON.stringify(donnees.revenus || [])) { donnees.revenus = neufs; change = true; }
+      if (JSON.stringify(neufs) !== JSON.stringify(donnees.revenus_journal || [])) { donnees.revenus_journal = neufs; change = true; }
     }
     if (change) {
       syntheses.sort((a, b) => String(b.date).localeCompare(String(a.date)));
       lignes.sort((a, b) => String(b.date).localeCompare(String(a.date)));
     }
     return change;
+  }
+  // Bases Mesures, Actions, Décisions et Revenus, état des connexions et suivi GitHub.
+  async function appliquerPilotage(j) {
+    const avant = JSON.stringify([donnees.mesures, donnees.actions, donnees.decisions, donnees.revenus, donnees.bases, donnees.connexions, donnees.suivi]);
+    donnees.mesures = Array.isArray(j.mesures) ? j.mesures : [];
+    donnees.actions = Array.isArray(j.actions) ? j.actions : [];
+    donnees.decisions = Array.isArray(j.decisions) ? j.decisions : [];
+    donnees.revenus_notion = Array.isArray(j.revenus) ? j.revenus : [];
+    donnees.bases = j.bases || {};
+    donnees.connexions = j.connexions || {};
+    donnees.lu_le = j.lu_le || null;
+    if (window.PILOTAGE_CALCULS) donnees.revenus = window.PILOTAGE_CALCULS.fusionnerRevenus(donnees.revenus_journal || [], donnees.revenus_notion, donnees.projets || []);
+    if (donnees.connexions.github) {
+      try {
+        const r = await fetch(RELAIS + '/suivi', { headers: { Authorization: 'Bearer ' + jeton }, cache: 'no-store' });
+        if (r.ok) donnees.suivi = await r.json();
+      } catch (e) { /* le suivi GitHub est un plus */ }
+    } else donnees.suivi = null;
+    return JSON.stringify([donnees.mesures, donnees.actions, donnees.decisions, donnees.revenus, donnees.bases, donnees.connexions, donnees.suivi]) !== avant;
   }
   function indiquerSynchro(etat) {
     const el = document.getElementById('notion-synchro');
@@ -792,7 +945,8 @@
         const fiches = Array.isArray(j.projets) ? j.projets : [];
         const changeFiches = appliquerNotion(fiches);
         const changeRapports = appliquerRapports(Array.isArray(j.rapports) ? j.rapports : [], fiches);
-        if (changeFiches || changeRapports) {
+        const changePilotage = await appliquerPilotage(j);
+        if (changeFiches || changeRapports || changePilotage) {
           contexteTexte = construireContexte(donnees);
           if (window.PILOTAGE && window.PILOTAGE.charger) window.PILOTAGE.charger(donnees);
         }
@@ -812,6 +966,7 @@
   window.ASSISTANT = {
     activer(mdp, paquet, publie) {
       donnees = paquet || {};
+      donnees.revenus_journal = Array.isArray(donnees.revenus) ? donnees.revenus.slice() : [];
       publieLe = Date.parse(publie || '') || 0;
       contexteTexte = construireContexte(donnees);
       jetonPret = deriver(mdp).then((h) => { jeton = h; return h; }).catch(() => null);
@@ -823,6 +978,7 @@
     },
     contexte: () => contexteTexte,
     synchroniser: () => synchroniserNotion(true),
+    cocher,
     pourLaVoix,
   };
 })();

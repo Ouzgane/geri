@@ -17,7 +17,11 @@ Ce dépôt, le site et le projet Claude « GERI » servent uniquement au pilotag
 Le site lit Notion en direct, par le relais de Geri (`GET /projets`, jeton requis) : à l'ouverture, au retour sur l'onglet, toutes les 2 minutes et après chaque enregistrement par Geri. L'en-tête indique l'heure de la dernière synchronisation.
 
 - Base **Projets** : décision, statut et objectif toujours repris ; les autres champs dès que la fiche a été modifiée après la publication de la copie chiffrée. Un projet créé dans Notion apparaît aussitôt.
-- Base **Rapports du matin** : briefing du jour (titre, synthèse, arbitrages, alertes), avancement de chaque projet jour après jour et journal des encaissements.
+- Base **Rapports du matin** : briefing du jour (titre, synthèse, arbitrages, alertes), ce qui a changé depuis la veille, revue du dimanche, indicateurs du pilotage, avancement de chaque projet jour après jour et journal des encaissements.
+- Base **Mesures** : relevés datés de l'indicateur clé et de l'entonnoir de chaque projet (audience, intention, vente, dossier). Écrite chaque matin par le relais (Plausible) et par le rapport du matin.
+- Base **Actions** : « Ta liste », ce qui attend ta main ou celle d'un tiers, avec l'espace du projet où le mener. « C'est fait » sur le site la coche ici.
+- Base **Décisions** : journal de tes décisions (choix, raison, résultat attendu, date de revue). Geri y écrit chaque décision que tu confirmes.
+- Base **Revenus** : les ventes Payhip y arrivent seules ; le site les ajoute au journal des encaissements du rapport, sans doublon.
 
 Chaque matin, la tâche planifiée « Pilotage des projets : rapport quotidien » met à jour le tableau de bord dans Claude et écrit le rapport du jour dans ces deux bases : il apparaît sur le site sans republier la copie chiffrée. Une tâche planifiée n'a accès qu'aux dépôts GitHub de la conversation où elle a été créée, et ce réglage ne se modifie pas ensuite : la tâche a été recréée le 15 novembre 2026 depuis une conversation qui avait les dépôts des projets (pare-72h, epargne-site, raphael-video, trading5, tablee, larmina, kitvital-actualites), qu'elle lit sans y écrire. Pour lui donner un nouveau dépôt, il faut la recréer de la même façon. Elle ne lit ni Plausible, ni Payhip, ni KDP, ni Partenaires Amazon : ces chiffres viennent des sessions de travail, notés et datés dans le journal des fiches.
 
@@ -31,6 +35,27 @@ PILOTAGE_MDP='…' node outils/verifier.mjs
 ```
 
 Pour changer de mot de passe : republier avec le nouveau, mettre à jour la tâche planifiée, puis l'empreinte de l'assistant (voir plus bas).
+
+## Ta liste, gouvernance et traction (15 novembre 2026)
+
+- **Ta liste** (section 02 et indicateur « Ta liste » autour de Geri) : les actions à faire, triées par qui doit agir, par impact (revenu, décision, obligation, vérification), puis par retard. Chacune a une référence (A1, A2…) que Geri connaît : « j'ai fait A3 » propose une carte à confirmer. À côté : les pull requests ouvertes et les échecs de workflows des 7 derniers jours, lus sur GitHub.
+- **Gouvernance** (section 03) : projets ouverts face au plafond (`plafondProjets` dans `config.js`, 3 par défaut), décisions qui t'attendent, écarts entre recommandation et décision, décisions arrivées à leur date de revue, objectifs et critères d'arrêt fixés, capital en jeu. Un simulateur montre ce que libérerait la mise en pause d'un projet (rien n'est écrit). La fraîcheur de chaque source est affichée.
+- **Traction** (dans chaque fiche) : l'indicateur clé du projet, sa cible, sa courbe et, dès 3 jours de relevés, la date où la cible serait atteinte à ce rythme ; puis l'entonnoir audience → intention → vente.
+- **Briefing** : « Ce qui a changé depuis hier », la revue du dimanche, et les alertes marquées « Nouveau » ou avec leur nombre de jours.
+- Les calculs sont dans `pilotage.js`, partagés par le tableau et par Geri ; tests : `node --test outils/pilotage.test.mjs`.
+
+## Connexions du pilotage
+
+Toutes lisent sans rien modifier dans les projets ; seules les bases Notion du pilotage reçoivent des écritures. Chaque clé est un secret GitHub de ce dépôt (Settings → Secrets and variables → Actions), posé dans le relais au déploiement ; sans elle, la connexion reste éteinte et le site l'indique.
+
+| Connexion | Secret | Ce qu'elle fait |
+|---|---|---|
+| Payhip | `PAYHIP_CLE` (clé API, Settings → Developer) | Payhip envoie un webhook signé à chaque vente ou remboursement vers `…workers.dev/payhip` ; le relais vérifie la signature (SHA-256 de la clé) et inscrit la ligne dans « Revenus », sans e-mail ni IP de l'acheteur, sans doublon. L'adresse se règle dans le compte Payhip (Settings → Developer → Webhook URL, événements paid et refunded). |
+| Plausible | `PLAUSIBLE_CLE` (clé « Stats API », lecture seule) | Chaque matin à 5 h 17 UTC, le relais relève visites et visiteurs (jour, 7 et 30 jours) et les objectifs des sites de `PLAUSIBLE_SITES`, dans « Mesures ». `POST /releve` relance le relevé à la demande. |
+| GitHub | `GITHUB_LECTURE` (jeton fin en lecture : Contents, Pull requests, Actions) | `GET /suivi` lit les dépôts de `GITHUB_DEPOTS` : pull requests ouvertes, dernier commit, échecs récents (gardé 10 minutes). |
+| Google Drive | aucun (connecteur du rapport du matin) | Dossier « GERI : relevés à déposer » : tu y déposes les exports qu'aucun agent ne peut lire (KDP, Partenaires Amazon) ; le rapport du matin les reporte dans « Mesures ». |
+
+Les nouvelles bases (Mesures, Actions, Décisions, Revenus) doivent être partagées avec l'intégration Notion de Geri, comme Projets et Rapports du matin ; sinon le site affiche « base non lisible » et le reste fonctionne.
 
 ## Assistant IA
 
@@ -56,7 +81,7 @@ Demande « mets du jazz », « de quoi me concentrer » ou colle un lien Spotify
 
 ### Notion
 
-Quand tu annonces une décision ou un changement (« je mets Tablée en pause jusqu'en janvier »), Geri propose une carte **« Enregistrer dans Notion »** : rien n'est écrit sans ton clic. Champs modifiables : Décision, Statut, Prochaine étape, Échéance, Blocages, Résumé, dans la base **Projets** de la page « Pilotage des projets ». Le tableau se met à jour aussitôt ; le rapport du matin reprend ces valeurs depuis Notion.
+Quand tu annonces une décision ou un changement (« je mets Tablée en pause jusqu'en janvier »), Geri propose une carte **« Enregistrer dans Notion »** : rien n'est écrit sans ton clic. Champs modifiables : Décision, Statut, Prochaine étape, Échéance, Blocages, Résumé, Objectif revenu mensuel, Critère d'arrêt et Date du critère, dans la base **Projets** de la page « Pilotage des projets ». Une décision confirmée entre aussi au journal **Décisions**, avec sa raison et le résultat attendu si tu les as dits, et une date de revue (14 jours par défaut). Quand tu dis avoir fait une action de ta liste, Geri propose une carte **« C'est fait »**. Le tableau se met à jour aussitôt ; le rapport du matin reprend ces valeurs depuis Notion.
 
 Mise en service : créer une intégration Notion interne (notion.so/profile/integrations, droits « lire » et « modifier le contenu »), lui donner accès aux bases « Projets » et « Rapports du matin » (onglet « Content access »), mettre son secret dans le secret GitHub `NOTION_CLE`, puis relancer le workflow « Relais IA ». Les identifiants des deux bases sont `NOTION_SOURCE` et `NOTION_RAPPORTS` dans `relais/wrangler.toml`.
 
@@ -106,7 +131,8 @@ Si le mot de passe du site change : `PILOTAGE_MDP='…' node outils/empreinte-ia
 ## Fichiers
 
 - `index.html` : la page, son écran d'accès et le panneau de l'assistant.
-- `app.js` : calculs et dessins, repris du tableau de bord Claude.
+- `app.js` : calculs et dessins, repris du tableau de bord Claude, plus ta liste, la gouvernance et la traction.
+- `pilotage.js` : calculs partagés par le tableau et Geri (liste et références, traction, gouvernance, sources, simulation, fusion des revenus).
 - `dash-shim.js` : fournit les données déchiffrées à `app.js`.
 - `acces.js` : téléchargement, déchiffrement et mémorisation du mot de passe.
 - `geri.js` : la sphère de Geri au centre de la page, ses ondes quand elle parle, et la mise en lumière des indicateurs qu'elle évoque.
@@ -114,7 +140,7 @@ Si le mot de passe du site change : `PILOTAGE_MDP='…' node outils/empreinte-ia
 - `voix.js`, `voix-worker.js` : la voix Piper (synthèse hors de la page, lecture et niveau sonore).
 - `musique.js` : le lecteur Spotify.
 - `config.js` : adresse du relais, nom de l'assistante, sa prononciation et sa voix.
-- `relais/` : le relais IA (Cloudflare Worker) et ses tests.
+- `relais/` : le relais IA (Cloudflare Worker) et ses tests : `src/notion.js` (lectures et écritures Notion), `src/payhip.js` (ventes), `src/releve.js` (Plausible), `src/github.js` (suivi en lecture).
 - `.github/workflows/relais.yml` : déploiement automatique du relais.
 - `vendor/` : D3, onnxruntime-web et piper-phonemize (voir `vendor/LICENCES.md`).
 - `outils/` : publication et vérification du fichier chiffré, empreinte de l'assistant (Node 20 ou plus, sans dépendance).

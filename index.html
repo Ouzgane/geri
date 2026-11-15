@@ -225,6 +225,66 @@ body.verrouille { overflow: hidden; height: 100vh; }
 .hud-card details[open] summary { margin-bottom: 8px; }
 .hud-empty { color: var(--hud-muted); font-family: var(--hud-mono); font-size: 12px; padding: 16px 0; }
 
+
+/* Pilotage : ta liste, gouvernance, traction (15/11/2026) */
+.pl-vide { display: none !important; }
+.pl-cols-haut { align-items: start; }
+.pl-liste { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pl-item { display: grid; grid-template-columns: 38px 1fr auto; align-items: start; gap: 12px; padding: 10px 12px; border: 1px solid var(--hud-line); border-radius: 10px; background: rgba(77, 227, 255, .04); font-size: var(--cds-font-size-caption); line-height: 1.5; }
+.pl-item.pl-retard { border-color: rgba(255, 79, 110, .35); background: rgba(255, 79, 110, .05); }
+.pl-item-fait { opacity: .75; }
+.pl-ref { font-family: var(--hud-mono); font-size: 11px; color: var(--hud-cyan); padding-top: 2px; }
+.pl-corps { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pl-titre { color: #ffffff; font-size: 13.5px; }
+a.pl-titre { text-decoration: none; }
+a.pl-titre:hover { text-decoration: underline; }
+.pl-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--hud-muted); font-family: var(--hud-mono); font-size: 10.5px; letter-spacing: .03em; }
+.pl-impact { --c: var(--hud-pause); border-color: var(--c); color: var(--c); }
+.pl-quand-retard { color: var(--hud-bad); }
+.pl-ou { color: var(--hud-muted); font-size: 12px; }
+.pl-fait { appearance: none; border: 1px solid var(--hud-line2); background: rgba(61, 255, 176, .08); color: var(--hud-ok); border-radius: 999px; padding: 5px 12px; font-family: var(--hud-mono); font-size: 11px; cursor: pointer; white-space: nowrap; }
+.pl-fait:hover:not(:disabled) { background: rgba(61, 255, 176, .18); }
+.pl-fait:disabled { opacity: .6; cursor: progress; }
+.pl-rouvrir { color: var(--hud-muted); background: transparent; }
+.pl-err { grid-column: 2 / -1; color: var(--hud-bad); font-size: 11.5px; }
+.pl-faites summary { cursor: pointer; }
+.pl-faites[open] summary { margin-bottom: 10px; }
+.pl-nouveau { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; background: rgba(77, 227, 255, .16); color: var(--hud-cyan2); font-family: var(--hud-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.pl-compteur { padding: 0 5px; border-radius: 4px; background: rgba(255, 190, 77, .16); color: var(--hud-warn); font-family: var(--hud-mono); font-size: 10.5px; }
+.pl-changements li { border-color: rgba(61, 255, 176, .25); background: rgba(61, 255, 176, .04); padding-left: 32px; }
+.pl-changements li::before { content: "+"; color: var(--hud-ok); left: 14px; }
+.pl-revue { border: 1px solid var(--hud-line); border-radius: 10px; padding: 12px 14px; background: rgba(180, 140, 255, .05); }
+.pl-revue-date { font-family: var(--hud-mono); font-size: 11px; color: var(--hud-violet); margin-bottom: 6px !important; }
+.pl-revue-l { line-height: 1.55; font-size: 13px; margin-bottom: 4px !important; }
+.pl-tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.pl-tuile { border: 1px solid var(--hud-line); border-radius: 12px; padding: 12px 14px; background: rgba(77, 227, 255, .03); display: flex; flex-direction: column; gap: 4px; }
+.pl-tuile-alerte { border-color: rgba(255, 190, 77, .45); background: rgba(255, 190, 77, .05); }
+.pl-tuile-val { font-family: var(--hud-mono); font-size: 26px; color: #ffffff; font-variant-numeric: tabular-nums; }
+.pl-tuile-sous { color: var(--hud-muted); font-size: 12px; line-height: 1.45; }
+.pl-gouv-pied { margin-top: 12px !important; }
+.pl-sources { list-style: none; padding: 0; margin-top: 10px !important; display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
+.pl-sources li { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; }
+.pl-source-etat { font-family: var(--hud-mono); font-size: 10.5px; color: var(--hud-muted); text-align: right; }
+.pl-simu-puces { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px !important; }
+.pl-simu-b { border: 1px solid var(--hud-line2); }
+.pl-simu-b[aria-pressed="true"] { background: rgba(139, 147, 184, .25); color: #ffffff; text-decoration: line-through; }
+.pl-trac { border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(3, 14, 26, .35); }
+.pl-trac-tete { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pl-trac-nom { font-family: var(--hud-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--hud-muted); }
+.pl-trac-val { font-family: var(--hud-mono); font-size: 16px; color: #ffffff; font-weight: 500; }
+.pl-trac-cible { font-family: var(--hud-mono); font-size: 11px; color: var(--hud-muted); }
+.pl-trac-barre { height: 6px; }
+.pl-trac-bas { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pl-trac-sous { color: var(--hud-muted); font-size: 11.5px; }
+.pl-spark { display: block; overflow: visible; }
+.pl-ent { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-ent-etape { display: flex; flex-direction: column; gap: 1px; padding: 4px 8px; border-left: 2px solid var(--c); background: rgba(77, 227, 255, .04); border-radius: 0 6px 6px 0; }
+.pl-ent-nom { font-family: var(--hud-mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--c); }
+.pl-ent-m { font-size: 11.5px; color: var(--hud-text); }
+.pl-chip-liste { text-decoration: none; color: var(--hud-warn); border-color: rgba(255, 190, 77, .45); }
+.pl-chip-retard { color: var(--hud-bad); border-color: rgba(255, 79, 110, .5); }
+@media (max-width: 560px) { .pl-item { grid-template-columns: 30px 1fr; } .pl-fait { grid-column: 2; justify-self: start; } }
+
 /* Définitions */
 .hud-defs summary { cursor: pointer; font-family: var(--hud-mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--hud-cyan); }
 .hud-defs dl { margin-top: 12px !important; display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 8px 18px; font-size: var(--cds-font-size-caption); line-height: 1.5; }
@@ -539,6 +599,12 @@ body.verrouille { overflow: hidden; height: 100vh; }
         <div class="hud-pod-sub">Vers le premier revenu récurrent</div>
         <i class="hud-pod-bar"></i>
       </div>
+      <div class="hud-panel hud-pod" id="kpi-liste">
+        <div class="hud-pod-label">Ta liste</div>
+        <div class="hud-pod-val dash-skeleton" data-draw="k-liste" data-source="liste_resume" data-field="toi" data-row="0">—</div>
+        <div class="hud-pod-sub">En retard : <b data-draw="k-liste-retard" class="dash-skeleton" data-source="liste_resume" data-field="en_retard" data-row="0">—</b> · Retard cumulé : <b data-draw="k-liste-cumul" class="dash-skeleton" data-source="liste_resume" data-field="retard_cumule" data-row="0">—</b></div>
+        <i class="hud-pod-bar"></i>
+      </div>
       <div class="hud-panel hud-pod" id="kpi-automatisations">
         <div class="hud-pod-label">Automatisations actives</div>
         <div class="hud-pod-val dash-skeleton" data-draw="k-auto" data-source="kpi" data-field="nb_automatisations" data-row="0">—</div>
@@ -566,6 +632,14 @@ body.verrouille { overflow: hidden; height: 100vh; }
     <div class="hud-h"><span class="hud-idx">01</span><h2>Briefing du jour</h2><i class="hud-rule"></i></div>
     <p class="hud-brief-title dash-skeleton" data-draw="s-titre" data-source="syntheses" data-field="titre" data-row="0">—</p>
     <p class="hud-brief-text dash-skeleton" data-draw="s-texte" data-source="syntheses" data-field="synthese" data-row="0">—</p>
+    <div class="pl-bloc pl-vide" id="changements">
+      <h3 class="hud-h3">Ce qui a changé depuis hier</h3>
+      <ul class="hud-list pl-changements" data-draw="s-changements" data-source="syntheses" data-field="changements" data-row="0"></ul>
+    </div>
+    <div class="pl-bloc pl-vide pl-revue" id="revue">
+      <h3 class="hud-h3">Revue de la semaine</h3>
+      <div data-draw="s-revue" data-source="syntheses" data-field="revue"></div>
+    </div>
     <div class="hud-cols">
       <div id="arbitrages-proposes">
         <h3 class="hud-h3">Arbitrages proposés par Claude</h3>
@@ -578,8 +652,46 @@ body.verrouille { overflow: hidden; height: 100vh; }
     </div>
   </section>
 
+  <section class="hud-section" id="ma-liste">
+    <div class="hud-h"><span class="hud-idx">02</span><h2>Ta liste</h2><i class="hud-rule"></i>
+      <div class="hud-seg" role="group" aria-label="Qui doit agir">
+        <button type="button" class="hud-seg-b" data-qui="Toi" aria-pressed="true">Toi</button>
+        <button type="button" class="hud-seg-b" data-qui="Tiers" aria-pressed="false">Tiers</button>
+        <button type="button" class="hud-seg-b" data-qui="Tout" aria-pressed="false">Tout</button>
+      </div>
+    </div>
+    <p class="hud-note">Ce qui attend ta main, projet par projet : d'abord ce qui fait venir le revenu, puis les décisions, les obligations et les vérifications ; à impact égal, le plus en retard en premier. Chaque ligne dit où la mener. « C'est fait » la coche dans Notion ; tu peux aussi le dire à Geri, avec sa référence (A1, A2…).</p>
+    <div class="hud-panel"><ol class="pl-liste" data-draw="ma-liste" data-source="liste"></ol></div>
+    <div class="hud-cols pl-cols-haut">
+      <div class="hud-panel">
+        <h3 class="hud-h3">Pull requests en attente et échecs récents</h3>
+        <ul class="pl-liste" data-draw="prs-attente" data-source="suivi"></ul>
+      </div>
+      <details class="hud-panel pl-bloc pl-vide pl-faites">
+        <summary class="hud-h3">Fait ces 14 derniers jours</summary>
+        <ul class="pl-liste" data-draw="liste-faite" data-source="actions"></ul>
+      </details>
+    </div>
+  </section>
+
+  <section class="hud-section" id="gouvernance">
+    <div class="hud-h"><span class="hud-idx">03</span><h2>Gouvernance du portefeuille</h2><i class="hud-rule"></i></div>
+    <p class="hud-note">Combien de projets tu portes en même temps, ce qui attend ta décision, où la recommandation du rapport diffère de ton choix, et les décisions arrivées à leur date de revue.</p>
+    <div class="hud-panel" data-draw="gouv" data-source="gouv"></div>
+    <div class="hud-cols">
+      <div class="hud-panel">
+        <h3 class="hud-h3">Simulateur d'arbitrage</h3>
+        <div data-draw="simulateur" data-source="projets liste"></div>
+      </div>
+      <div class="hud-panel">
+        <h3 class="hud-h3">Fraîcheur des sources</h3>
+        <div data-draw="sources" data-source="meta mesures revenus suivi"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="hud-section" id="arbitrage">
-    <div class="hud-h"><span class="hud-idx">02</span><h2>Matrice d'arbitrage</h2><i class="hud-rule"></i>
+    <div class="hud-h"><span class="hud-idx">04</span><h2>Matrice d'arbitrage</h2><i class="hud-rule"></i>
       <div class="hud-seg" role="group" aria-label="Choix de la vue">
         <button type="button" class="hud-seg-b" data-vue="holo" aria-pressed="true">Hologramme 3D</button>
         <button type="button" class="hud-seg-b" data-vue="plan" aria-pressed="false">Vue plane</button>
@@ -602,17 +714,17 @@ body.verrouille { overflow: hidden; height: 100vh; }
   </section>
 
   <section class="hud-section" id="revenus">
-    <div class="hud-h"><span class="hud-idx">03</span><h2>Flux de revenus</h2><i class="hud-rule"></i></div>
+    <div class="hud-h"><span class="hud-idx">05</span><h2>Flux de revenus</h2><i class="hud-rule"></i></div>
     <p class="hud-note">Cumul des encaissements enregistrés par projet. Le trait orange marque ton objectif mensuel quand tu en fixes un.</p>
     <div class="hud-panel"><div class="hud-chart" id="revenus-projets" data-draw="rev-projets" data-source="revenu_par_projet"></div></div>
     <h3 class="hud-h3">Encaissements par mois</h3>
     <div class="hud-chart" id="revenus-mois" data-draw="rev-mois" data-source="revenu_mensuel"></div>
-    <p class="hud-note">Pour enregistrer un encaissement, dis-le à Claude, ou ajoute une ligne au fichier « Journal des revenus » dans Sources : date (AAAA-MM-JJ), projet_id, projet, montant en euros, type, note.</p>
+    <p class="hud-note">Les ventes Payhip arrivent seules dans la base Notion « Revenus » (webhook signé), et s'ajoutent ici sans doublon. Pour un autre encaissement, dis-le à Claude, ou ajoute une ligne à la base « Revenus » ou au fichier « Journal des revenus » : date (AAAA-MM-JJ), projet, montant en euros, type, note.</p>
   </section>
 
   <section class="hud-section" id="projets">
     <div class="hud-head2">
-      <div class="hud-h" style="flex:1 1 280px"><span class="hud-idx">04</span><h2>Projets</h2><i class="hud-rule"></i></div>
+      <div class="hud-h" style="flex:1 1 280px"><span class="hud-idx">06</span><h2>Projets</h2><i class="hud-rule"></i></div>
       <div class="hud-controls">
         <label>Pôle <select class="dash-select" data-draw="filtre-pole" aria-label="Filtrer par pôle"></select></label>
         <label>Tri <select class="dash-select pp-tri" aria-label="Trier les projets">
@@ -627,7 +739,7 @@ body.verrouille { overflow: hidden; height: 100vh; }
   </section>
 
   <section class="hud-section" id="evolution">
-    <div class="hud-h"><span class="hud-idx">05</span><h2>Trajectoires</h2><i class="hud-rule"></i></div>
+    <div class="hud-h"><span class="hud-idx">07</span><h2>Trajectoires</h2><i class="hud-rule"></i></div>
     <p class="hud-note">L'avancement de chaque projet, rapport après rapport. Une ligne s'ajoute chaque matin.</p>
     <div class="hud-panel"><div class="hud-chart hud-chart-lg" id="courbe-avancement" data-draw="evolution" data-source="rapports"></div></div>
   </section>
@@ -640,6 +752,11 @@ body.verrouille { overflow: hidden; height: 100vh; }
       <dt>Effort restant</dt><dd>De 1 à 5 : le travail et l'argent à engager avant le premier revenu.</dd>
       <dt>Recommandation</dt><dd>Proposée par Claude à chaque rapport, à partir de l'activité constatée, du revenu et des blocages. « À arbitrer » signale un choix qui t'appartient.</dd>
       <dt>Décision</dt><dd>La tienne. Claude ne la modifie jamais ; dis-lui ce que tu décides et il l'enregistre.</dd>
+      <dt>Ta liste</dt><dd>Les actions qui attendent ta main (ou celle d'un tiers), tirées des fiches et des rapports. Retard : jours passés depuis l'échéance. Retard cumulé : la somme de ces jours sur toutes tes actions.</dd>
+      <dt>Traction</dt><dd>L'indicateur clé de chaque projet (audience, ventes ou dossier), relevé chaque matin dans la base Notion « Mesures », avec sa cible quand le plan en fixe une. « À ce rythme » prolonge la tendance des relevés : ce n'est pas une prévision de revenu.</dd>
+      <dt>Gouvernance</dt><dd>Projets ouverts : statut Actif, Accéléré ou Analyse en cours, face à un plafond de 3 (réglable dans config.js). Décisions à revoir : celles du journal des décisions arrivées à leur date de revue (14 jours par défaut).</dd>
+      <dt>Critère d'arrêt</dt><dd>Le tien : un seuil daté (par exemple « moins de 3 ventes au 31 décembre ») que le rapport du matin vérifie à sa date. Avec l'objectif de revenu mensuel, c'est à toi de le fixer.</dd>
+      <dt>Sources</dt><dd>Plausible (audience, lecture seule), Payhip (ventes reçues par webhook), GitHub (lecture seule) et le dossier Drive « GERI : relevés à déposer » pour ce qu'aucun agent ne peut lire (KDP, Partenaires Amazon). Une source « éteinte » attend sa clé.</dd>
       <dt>Revenus</dt><dd>Uniquement les encaissements du journal des revenus, en euros. Aucun montant estimé.</dd>
       <dt>Accès</dt><dd>Les données sont chiffrées (AES-256) et ne se lisent qu'avec le mot de passe, directement dans ton navigateur. « Verrouiller » efface le mot de passe mémorisé sur cet appareil.</dd>
       <dt>Assistant</dt><dd>Le bouton lumineux en bas à droite ouvre l'assistant. Il répond par écrit et à voix haute à partir des données de ce tableau. Il n'écoute jamais : aucun micro n'est utilisé. Il ne modifie rien. Le bouton haut-parleur coupe la voix.</dd>
@@ -678,13 +795,14 @@ body.verrouille { overflow: hidden; height: 100vh; }
   </section>
 </div>
 <script src="vendor/d3.min.js"></script>
-<script src="dash-shim.js?v=20261110g"></script>
-<script src="app.js?v=20261110g"></script>
-<script src="config.js?v=20261110g"></script>
-<script src="geri.js?v=20261110g"></script>
-<script src="voix.js?v=20261110g"></script>
-<script src="musique.js?v=20261110g"></script>
-<script src="assistant.js?v=20261110g"></script>
-<script src="acces.js?v=20261110g"></script>
+<script src="pilotage.js?v=20261115a"></script>
+<script src="dash-shim.js?v=20261115a"></script>
+<script src="app.js?v=20261115a"></script>
+<script src="config.js?v=20261115a"></script>
+<script src="geri.js?v=20261115a"></script>
+<script src="voix.js?v=20261115a"></script>
+<script src="musique.js?v=20261115a"></script>
+<script src="assistant.js?v=20261115a"></script>
+<script src="acces.js?v=20261115a"></script>
 </body>
 </html>

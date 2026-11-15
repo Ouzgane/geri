@@ -23,6 +23,9 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       IA_CLE: ${{ secrets.IA_CLE }}
       NOTION_CLE: ${{ secrets.NOTION_CLE }}
+      PAYHIP_CLE: ${{ secrets.PAYHIP_CLE }}
+      PLAUSIBLE_CLE: ${{ secrets.PLAUSIBLE_CLE }}
+      GITHUB_LECTURE: ${{ secrets.GITHUB_LECTURE }}
     steps:
       - uses: actions/checkout@v7
 
@@ -63,6 +66,22 @@ jobs:
         if: steps.verif.outputs.pret == 'true' && env.NOTION_CLE != ''
         working-directory: relais
         run: printf '%s' "$NOTION_CLE" | npx --yes wrangler@4 secret put NOTION_CLE
+
+      # Connexions du pilotage : chaque clé est facultative ; sans elle, la connexion reste éteinte.
+      - name: Clé Payhip (signature des ventes reçues)
+        if: steps.verif.outputs.pret == 'true' && env.PAYHIP_CLE != ''
+        working-directory: relais
+        run: printf '%s' "$PAYHIP_CLE" | npx --yes wrangler@4 secret put PAYHIP_CLE
+
+      - name: Clé Plausible (relevé de l'audience, lecture seule)
+        if: steps.verif.outputs.pret == 'true' && env.PLAUSIBLE_CLE != ''
+        working-directory: relais
+        run: printf '%s' "$PLAUSIBLE_CLE" | npx --yes wrangler@4 secret put PLAUSIBLE_CLE
+
+      - name: Jeton GitHub en lecture (suivi des dépôts des projets)
+        if: steps.verif.outputs.pret == 'true' && env.GITHUB_LECTURE != ''
+        working-directory: relais
+        run: printf '%s' "$GITHUB_LECTURE" | npx --yes wrangler@4 secret put GITHUB_LECTURE
 
       - name: Brancher le site sur le relais
         if: steps.verif.outputs.pret == 'true'

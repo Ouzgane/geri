@@ -19,7 +19,8 @@
 
   // ── Indicateurs du tableau : valeurs propres à cette page ─────────────────────
   if (window.dash) {
-    const eur = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(v) || 0);
+    // Centimes affichés dès qu'un montant n'est pas rond (une vente du livret à 9,90 €).
+    const eur = (v) => { const n = Number(v) || 0; const c = Number.isInteger(n) ? 0 : 2; return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: c, maximumFractionDigits: c }).format(n); };
     window.dash.draw('k-total', (n) => {
       const k = window.dash.data('kpi');
       if (k.status !== 'ok' || !k.data.length) { n.textContent = '—'; return; }
@@ -220,6 +221,7 @@
     { id: 'kpi-avancement', motif: /avancement|progress|\d+\s?%|pour ?cent/gi },
     { id: 'kpi-automatisations', motif: /automatis|t[âa]ches? planifi/gi },
     { id: 'kpi-proche', motif: /premier euro|plus proche/gi },
+    { id: 'kpi-liste', motif: /ta liste|t.attend(ent)?|en retard|retard cumul/gi },
   ];
   const echapper = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   function ciblesProjets() {
