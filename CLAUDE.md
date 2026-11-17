@@ -18,5 +18,6 @@ Cette règle passe avant toutes les autres, « zéro dette » comprise.
 ## Champs et bases du pilotage (15 novembre 2026)
 - Au porteur seulement : Décision, Statut, Objectif revenu mensuel, Critère d'arrêt et Date du critère (base Projets). Claude ne les remplit jamais ; Geri les propose seulement quand le porteur les dicte, et il confirme.
 - Bases sous « Pilotage des projets » : Projets, Rapports du matin, Mesures, Actions (« Ta liste »), Décisions (journal), Revenus. Le relais écrit dans Mesures (Plausible), Revenus (webhook Payhip signé), Actions (clic « C'est fait ») et Décisions (décision confirmée).
+- Audience des sites (17 novembre 2026) : deuxième indicateur après le revenu, partout (tableau, Geri, rapport du matin). Toujours sur des jours complets, période comparée à la précédente de même durée, pas de commentaire de variation sous 10 visites.
 - Les connexions (Plausible, GitHub, Payhip) lisent les projets sans jamais y écrire. Régler un compte de projet (webhook Payhip, comptes de réseaux) reste une action du porteur, notée dans la fiche du projet.
 

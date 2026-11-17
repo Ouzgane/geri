@@ -6,22 +6,28 @@
 //                 confirmée est aussi inscrite au journal des décisions.
 // POST /action    une action de « Ta liste » passe à Fait (ou revient à faire), au clic (jeton requis).
 // GET  /suivi     GitHub en lecture : pull requests ouvertes, dernier commit, échecs (jeton requis).
-// POST /releve    relève l'audience Plausible tout de suite (jeton requis) ; sinon chaque matin à 5 h 17 UTC.
+// POST /releve    relève l'audience Plausible tout de suite (jeton requis), un site par appel (?site=) ;
+//                 sinon chaque matin, un passage par site à partir de 5 h 17 UTC.
+// GET  /audience  historique de l'audience : visites jour par jour sur 90 jours, sources, pages (jeton requis).
 // POST /payhip    webhook signé de Payhip : une vente ou un remboursement va dans la base Revenus.
 
 import { appeler, decrireFournisseur, ErreurConfig, ErreurQuota } from './fournisseurs.js';
 import { consignes, analyser, validerNotion } from './consignes.js';
 import { ecrireNotion, lireProjets, lireRapports, lireMesures, lireActions, lireDecisions, lireRevenus, majAction, creerDecision, ErreurNotion } from './notion.js';
 import { recevoirPayhip } from './payhip.js';
-import { releverPlausible } from './releve.js';
+import { releverPlausible, audience, sitesPlausible } from './releve.js';
 import { suiviGithub } from './github.js';
 
 const LIMITES = { corps: 96000, historique: 14, message: 2000, contexte: 30000 };
 
 export default {
   // Relevé du matin (déclencheur programmé de wrangler.toml), avant le rapport de 7 h 47.
+  // Un passage par site (crons de wrangler.toml, dans l'ordre de PLAUSIBLE_SITES) : chaque passage
+  // reste loin de la limite de sous-requêtes d'une exécution.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(releverPlausible(env).then((r) => console.log('releve', JSON.stringify(r))).catch((e) => console.error('releve', e && (e.stack || e.message || e))));
+    const crons = String(env.RELEVE_CRONS || '17 5 * * *;19 5 * * *;21 5 * * *').split(';').map((c) => c.trim());
+    const rang = crons.indexOf(String(event && event.cron || '').trim());
+    ctx.waitUntil(releverPlausible(env, { rang: rang >= 0 ? rang : null }).then((r) => console.log('releve', JSON.stringify(r))).catch((e) => console.error('releve', e && (e.stack || e.message || e))));
   },
 
   async fetch(request, env) {
@@ -66,7 +72,7 @@ export default {
           projets, rapports: rapports || [], rapports_ok: rapports !== null,
           mesures: mesures || [], actions: actions || [], decisions: decisions || [], revenus: revenus || [],
           bases: { mesures: etat(mesures), actions: etat(actions), decisions: etat(decisions), revenus: etat(revenus) },
-          connexions: { payhip: !!env.PAYHIP_CLE, plausible: !!env.PLAUSIBLE_CLE, github: !!env.GITHUB_LECTURE },
+          connexions: { payhip: !!env.PAYHIP_CLE, plausible: !!env.PLAUSIBLE_CLE, github: !!env.GITHUB_LECTURE, plausible_sites: env.PLAUSIBLE_CLE ? sitesPlausible(env) : [] },
           lu_le: new Date().toISOString(),
         }, 200, cors);
       } catch (e) {
@@ -99,7 +105,13 @@ export default {
     }
     if (url.pathname === '/releve' && request.method === 'POST') {
       if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
-      return json(await releverPlausible(env), 200, cors);
+      const site = url.searchParams.get('site');
+      return json(await releverPlausible(env, site ? { site } : {}), 200, cors);
+    }
+    if (url.pathname === '/audience' && request.method === 'GET') {
+      if (!(await jetonValide(request, env))) return json({ erreur: 'Accès refusé.' }, 401, cors);
+      if (!env.PLAUSIBLE_CLE) return json({ erreur: 'Audience pas encore branchée (secret PLAUSIBLE_CLE).' }, 501, cors);
+      return json(await audience(env), 200, cors);
     }
     if (url.pathname !== '/discuter') return json({ erreur: 'Adresse inconnue.' }, 404, cors);
     if (request.method !== 'POST') return json({ erreur: 'Méthode non autorisée.' }, 405, cors);

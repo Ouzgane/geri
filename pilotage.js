@@ -170,6 +170,160 @@
     return sortie.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   }
 
+  // ── Audience des sites : deuxième indicateur après le revenu ───────────────
+  // Source : l'historique Plausible du relais (/audience, jour par jour) ; à défaut, les relevés
+  // quotidiens de la base Mesures (Visites 30 j, 7 j et leurs périodes précédentes).
+  // Jours complets seulement (jusqu'à hier) : la journée en cours est mise à part.
+  const BRUIT = 10; // sous 10 visites sur les deux périodes comparées, une variation ne dit rien
+  const MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const jourCourt = (d) => (valide(d) ? `${+d.slice(8, 10)} ${MOIS_COURT[+d.slice(5, 7) - 1]}` : '—');
+  const moisLong = (d) => (valide(d) ? `${MOIS_FR[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}` : '—');
+  const entier = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const pctFr = (x) => (x > 0 ? '+' : x < 0 ? '−' : '') + String(Math.abs(Math.round(x * 100))) + ' %';
+
+  function variation(a, b) {
+    if (typeof a !== 'number' || typeof b !== 'number') return null;
+    const pct = b > 0 ? (a - b) / b : null;
+    const sens = Math.max(a, b) < BRUIT ? 'faible' : b === 0 ? 'nouveau' : Math.abs(pct) < 0.05 ? 'stable' : pct > 0 ? 'hausse' : 'baisse';
+    return { actuel: a, precedent: b, ecart: a - b, pct, sens };
+  }
+  const PERIODES = { 30: ['aux 30 jours précédents', 'les 30 jours précédents'], 7: ['à la semaine précédente', 'la semaine précédente'] };
+  const phraseVariation = (v, duree) => {
+    if (!v) return '';
+    const [rapport, avant] = PERIODES[duree];
+    if (v.sens === 'faible') return ' (trop peu de visites pour parler de progression)';
+    if (v.sens === 'nouveau') return `, contre aucune ${avant}`;
+    if (v.sens === 'stable') return `, stable par rapport ${rapport} (${entier(v.precedent)})`;
+    return `, ${pctFr(v.pct)} par rapport ${rapport} (${entier(v.precedent)})`;
+  };
+  // Pente des moindres carrés d'une série de nombres (par pas).
+  const pente = (ys) => {
+    const n = ys.length;
+    if (n < 2) return 0;
+    const mx = (n - 1) / 2, my = ys.reduce((t, y) => t + y, 0) / n;
+    let num = 0, den = 0;
+    ys.forEach((y, i) => { num += (i - mx) * (y - my); den += (i - mx) * (i - mx); });
+    return den ? num / den : 0;
+  };
+
+  function siteDepuisJours(s, jour) {
+    const hier = ajouterJours(jour, -1);
+    const par = new Map((s.jours || []).filter((x) => x && valide(x.date)).map((x) => [x.date, x]));
+    const val = (n, cle = 'visites') => { const x = par.get(ajouterJours(jour, -n)); return x ? Number(x[cle]) || 0 : 0; };
+    const somme = (de, a, cle) => { let t = 0; for (let n = de; n >= a; n--) t += val(n, cle); return t; };
+    const premier = [...par.keys()].sort()[0] || hier;
+    const profondeur = Math.max(0, jours(premier, jour)); // nombre de jours complets connus
+    const serie = [];
+    for (let n = Math.min(90, profondeur); n >= 1; n--) {
+      const d = ajouterJours(jour, -n);
+      const x = par.get(d) || {};
+      serie.push({ date: d, visites: Number(x.visites) || 0, visiteurs: Number(x.visiteurs) || 0, pages: Number(x.pages) || 0 });
+    }
+    serie.forEach((x, i) => { x.moyenne = i >= 6 ? serie.slice(i - 6, i + 1).reduce((t, y) => t + y.visites, 0) / 7 : null; });
+    const v30 = somme(30, 1), v7 = somme(7, 1);
+    const v30p = profondeur >= 60 ? somme(60, 31) : null, v7p = profondeur >= 14 ? somme(14, 8) : null;
+    // Tendance : pente des visites par jour sur 4 semaines, rapportée à la moyenne, par semaine.
+    const quatre = serie.slice(-28).map((x) => x.visites);
+    const moy = quatre.length ? quatre.reduce((t, y) => t + y, 0) / quatre.length : 0;
+    const total28 = quatre.reduce((t, y) => t + y, 0);
+    const parSemaine = moy > 0 && quatre.length >= 14 ? (pente(quatre) * 7) / moy : null;
+    const tendance = { pct_semaine: parSemaine, sens: quatre.length < 14 ? 'court' : total28 < 2 * BRUIT ? 'faible' : parSemaine === null ? 'stable' : parSemaine > 0.05 ? 'hausse' : parSemaine < -0.05 ? 'baisse' : 'stable' };
+    // Cumul glissant sur 30 jours, jour après jour (pour la projection vers une cible).
+    const cumul = [];
+    for (let n = 28; n >= 1; n--) if (profondeur >= n + 29) { let t = 0; for (let k = n; k < n + 30; k++) t += val(k); cumul.push(t); }
+    const meilleur = serie.slice(-30).reduce((m, x) => (x.visites > (m ? m.visites : 0) ? x : m), null);
+    const aujourdhuiEnCours = par.get(jour) ? Number(par.get(jour).visites) || 0 : null;
+    return { v30, v30p, v7, v7p, visiteurs30: somme(30, 1, 'visiteurs'), pages30: somme(30, 1, 'pages'), serie, tendance, cumul, meilleur, aujourdhui: aujourdhuiEnCours, dernier_jour: hier, profondeur };
+  }
+
+  function siteDepuisMesures(projet, mesures) {
+    const siennes = (mesures || []).filter((m) => m && m.projet_id === projet && m.source === 'Plausible' && valide(m.date) && typeof m.valeur === 'number')
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!siennes.length) return null;
+    const der = (ind) => { const l = siennes.filter((m) => m.indicateur === ind); return l.length ? l[l.length - 1] : null; };
+    const v30 = der('Visites 30 j');
+    if (!v30) return null;
+    const meme = (ind) => { const m = der(ind); return m && m.date === v30.date ? m.valeur : null; };
+    const serie = siennes.filter((m) => m.indicateur === 'Visites (jour)').map((m) => ({ date: m.date, visites: m.valeur, visiteurs: null, pages: null, moyenne: null }));
+    return { v30: v30.valeur, v30p: meme('Visites 30 j (préc.)'), v7: meme('Visites 7 j'), v7p: meme('Visites 7 j (préc.)'), visiteurs30: meme('Visiteurs 30 j'), pages30: meme('Pages vues 30 j'),
+      serie, tendance: { pct_semaine: null, sens: 'court' }, cumul: [], meilleur: null, aujourdhui: null, dernier_jour: ajouterJours(v30.date, -1), profondeur: 0, releve_le: v30.date };
+  }
+
+  function audience({ audience: a, mesures, projets, sites: config } = {}, { jour = aujourdhui() } = {}) {
+    const fiches = new Map((projets || []).map((p) => [p.id, p]));
+    const nomProjet = (id) => { const p = fiches.get(id); return p ? p.nom_court || p.projet : id; };
+    // Liste et ordre des sites : ceux du relais (ordre de PLAUSIBLE_SITES), sinon ceux de l'historique.
+    const declares = (Array.isArray(config) ? config : []).filter((x) => x && typeof x === 'object' && x.site);
+    const lus = a && Array.isArray(a.sites) ? a.sites : [];
+    const liste = declares.length ? declares.map((d) => ({ ...d, ...(lus.find((x) => x.site === d.site) || {}) })) : lus.slice();
+    if (!liste.length) {
+      // Sans relais : les projets qui ont des relevés Plausible dans Mesures.
+      [...new Set((mesures || []).filter((m) => m && m.source === 'Plausible').map((m) => m.projet_id))].filter(Boolean).forEach((p) => liste.push({ site: p, projet: p }));
+    }
+    const sites = liste.map((s, ordre) => {
+      const viaJours = Array.isArray(s.jours) && s.jours.length && !s.erreur;
+      const st = viaJours ? siteDepuisJours(s, jour) : siteDepuisMesures(s.projet, mesures);
+      const nom = s.site;
+      const base = { site: s.site, projet: s.projet || null, rattache: s.rattache || null, nom, ordre,
+        projet_nom: s.projet && fiches.has(s.projet) ? nomProjet(s.projet) : null, rattache_nom: s.rattache ? nomProjet(s.rattache) : null,
+        source: viaJours ? 'plausible' : st ? 'mesures' : null, erreur: s.erreur || null,
+        sources: Array.isArray(s.sources) ? s.sources : [], pages: Array.isArray(s.pages) ? s.pages : [] };
+      if (!st) return { ...base, v30: null, v30p: null, v7: null, v7p: null, var30: null, var7: null, serie: [], tendance: null, analyse: [`${nom} : pas encore de mesure d'audience${s.erreur ? ' (' + s.erreur + ')' : ''}.`] };
+      const fiche = s.projet ? fiches.get(s.projet) : null;
+      let cible = null;
+      if (fiche && typeof fiche.cible === 'number' && /visite/i.test(String(fiche.indicateur_cle || ''))) {
+        const c = { valeur: fiche.cible, progression: fiche.cible > 0 ? Math.min(1, st.v30 / fiche.cible) : 1, projection: null, horizon: null };
+        const p = pente(st.cumul);
+        if (st.v30 >= fiche.cible) c.horizon = 'atteinte';
+        else if (st.cumul.length < 14) c.horizon = null;
+        else if (p > 0) { const n = Math.ceil((fiche.cible - st.v30) / p); if (n <= 3 * 365) c.projection = ajouterJours(st.dernier_jour, n); else c.horizon = 'au-delà de 3 ans'; }
+        else c.horizon = 'pas de progression';
+        cible = c;
+      }
+      const var30 = variation(st.v30, st.v30p), var7 = variation(st.v7, st.v7p);
+      const analyse = [`${nom} : ${entier(st.v30)} visite${st.v30 > 1 ? 's' : ''} sur 30 jours${phraseVariation(var30, 30)}.`];
+      if (typeof st.v7 === 'number') analyse.push(`Sur 7 jours : ${entier(st.v7)}${phraseVariation(var7, 7)}.`);
+      const t = st.tendance;
+      if (t && t.sens === 'hausse') analyse.push(`Tendance sur 4 semaines : en hausse, environ ${pctFr(t.pct_semaine)} par semaine.`);
+      else if (t && t.sens === 'baisse') analyse.push(`Tendance sur 4 semaines : en baisse, environ ${pctFr(t.pct_semaine)} par semaine.`);
+      else if (t && t.sens === 'stable') analyse.push('Tendance sur 4 semaines : stable.');
+      else if (t && t.sens === 'faible') analyse.push('Tendance sur 4 semaines : trop peu de visites pour en dégager une.');
+      if (st.meilleur && st.meilleur.visites > 0) analyse.push(`Meilleur jour sur 30 jours : le ${jourCourt(st.meilleur.date)} (${entier(st.meilleur.visites)} visite${st.meilleur.visites > 1 ? 's' : ''}).`);
+      const src = base.sources[0], pg = base.pages[0];
+      if (src || pg) analyse.push([src ? `Principale source : ${src.nom}` : '', pg ? `page la plus vue : ${pg.chemin}` : ''].filter(Boolean).join(' ; ') + '.');
+      if (cible) {
+        const ou = cible.horizon === 'atteinte' ? 'atteinte' : cible.projection ? `à ce rythme, atteinte vers ${moisLong(cible.projection)}` : cible.horizon ? `à ce rythme : ${cible.horizon}` : 'projection dès 6 semaines d’historique';
+        analyse.push(`Cible de ${entier(cible.valeur)} visites sur 30 jours : ${Math.round(cible.progression * 100)} % atteints, ${ou}.`);
+      }
+      if (s.rattache) analyse.push(`Rattaché à la fiche ${base.rattache_nom}.`);
+      return { ...base, ...st, var30, var7, cible, analyse };
+    });
+    // Portefeuille : somme des sites mesurés.
+    const mesures30 = sites.filter((s) => typeof s.v30 === 'number');
+    const somme = (cle) => (mesures30.length && mesures30.every((s) => typeof s[cle] === 'number') ? mesures30.reduce((t, s) => t + s[cle], 0) : null);
+    const total = { v30: somme('v30'), v30p: somme('v30p'), v7: somme('v7'), v7p: somme('v7p'), aujourdhui: somme('aujourdhui') };
+    total.var30 = variation(total.v30, total.v30p);
+    total.var7 = variation(total.v7, total.v7p);
+    mesures30.forEach((s) => { s.part = total.v30 > 0 ? s.v30 / total.v30 : null; });
+    const dates = [...new Set(sites.flatMap((s) => (s.source === 'plausible' ? s.serie.map((x) => x.date) : [])))].sort();
+    total.serie = dates.map((d) => ({ date: d, visites: sites.reduce((t, s) => t + ((s.serie.find((x) => x.date === d) || {}).visites || 0), 0) }));
+    total.serie.forEach((x, i) => { x.moyenne = i >= 6 ? total.serie.slice(i - 6, i + 1).reduce((t, y) => t + y.visites, 0) / 7 : null; });
+    const analyse = [];
+    if (typeof total.v30 === 'number') {
+      analyse.push(`${entier(total.v30)} visite${total.v30 > 1 ? 's' : ''} sur 30 jours sur ${mesures30.length} site${mesures30.length > 1 ? 's' : ''}${phraseVariation(total.var30, 30)}.`);
+      const tete = mesures30.slice().sort((x, y) => y.v30 - x.v30)[0];
+      if (tete && mesures30.length > 1 && total.v30 > 0) analyse.push(`${tete.nom} en apporte ${Math.round(tete.part * 100)} %.`);
+      const lisibles = mesures30.length > 1 ? mesures30.filter((s) => s.var30 && (s.var30.sens === 'hausse' || s.var30.sens === 'baisse')) : [];
+      const haut = lisibles.filter((s) => s.var30.sens === 'hausse').sort((x, y) => y.var30.pct - x.var30.pct)[0];
+      const bas = lisibles.filter((s) => s.var30.sens === 'baisse').sort((x, y) => x.var30.pct - y.var30.pct)[0];
+      if (haut) analyse.push(`Plus forte progression : ${haut.nom} (${pctFr(haut.var30.pct)}).`);
+      if (bas) analyse.push(`En recul : ${bas.nom} (${pctFr(bas.var30.pct)}).`);
+    }
+    const via = sites.some((s) => s.source === 'plausible') ? 'plausible' : sites.some((s) => s.source === 'mesures') ? 'mesures' : null;
+    return { source: via, jour, dernier_jour: ajouterJours(jour, -1), sites, total, analyse, lu_le: (a && a.lu_le) || null };
+  }
+
   // Alertes nouvelles depuis le rapport précédent (le compteur « (3e jour) » est ignoré).
   const normAlerte = (s) => String(s || '').replace(/\(\s*\d+\s*(e|er|ème)?\s*jour\s*\)/gi, '').replace(/\s+/g, ' ').trim().toLowerCase();
   function alertesNouvelles(actuelles, precedentes) {
@@ -178,7 +332,8 @@
     return new Set(String(actuelles || '').split(/\n+/).map((s) => s.trim()).filter((s) => s && !avant.has(normAlerte(s))));
   }
 
-  const api = { aujourdhui, jours, ajouterJours, liste, faites, resumeListe, traction, gouvernance, simuler, sources, fusionnerRevenus, alertesNouvelles, ouvert, enAttente };
+  const api = { aujourdhui, jours, ajouterJours, liste, faites, resumeListe, traction, gouvernance, simuler, sources, fusionnerRevenus, alertesNouvelles, ouvert, enAttente,
+    audience, variation, jourCourt, moisLong };
   racine.PILOTAGE_CALCULS = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

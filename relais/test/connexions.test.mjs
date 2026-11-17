@@ -160,7 +160,7 @@ test('notion : une décision confirmée entre aussi au journal des décisions', 
 
 // ── Lectures ─────────────────────────────────────────────────────────────────
 test('projets : mesures, actions, décisions et revenus servis ; une base illisible ne bloque rien', async () => {
-  const env = envDe({ ...BASES, PLAUSIBLE_CLE: 'p' });
+  const env = envDe({ ...BASES, PLAUSIBLE_CLE: 'p', PLAUSIBLE_SITES: 'deswatts|deswatts.fr|kitvital' });
   const pg = (id, props) => ({ object: 'page', id, url: 'https://notion.so/' + id, properties: props });
   await avecFetch((url) => {
     if (url.includes('/projets-1/')) return repJson({ results: [pg('p1', { Projet: { title: t('KitVital') }, Id: { rich_text: t('KitVital') }, 'Indicateur clé': { rich_text: t('Visites 30 j') }, 'Cible indicateur': { number: 5000 } })] });
@@ -182,7 +182,7 @@ test('projets : mesures, actions, décisions et revenus servis ; une base illisi
     assert.equal(j.revenus[0].montant, 9.9);
     assert.equal(j.revenus[0].ref, 'payhip:X');
     assert.deepEqual(j.bases, { mesures: 'ok', actions: 'ok', decisions: 'erreur', revenus: 'ok' });
-    assert.deepEqual(j.connexions, { payhip: false, plausible: true, github: false });
+    assert.deepEqual(j.connexions, { payhip: false, plausible: true, github: false, plausible_sites: [{ projet: 'deswatts', site: 'deswatts.fr', rattache: 'kitvital' }] });
     const filtreActions = vus.find((v) => v.url.includes('/actions-1/')).corps.filter;
     assert.equal(filtreActions.or[0].select.equals, 'À faire');
   });
@@ -193,18 +193,33 @@ test('indicateurs du rapport : clé=valeur, nombres reconnus', () => {
 });
 
 // ── Plausible ────────────────────────────────────────────────────────────────
-test('relevé Plausible : indicateurs écrits dans Mesures, ligne du jour mise à jour si elle existe', async () => {
-  const env = envDe({ ...BASES, PLAUSIBLE_CLE: 'cle-plausible', PLAUSIBLE_SITES: 'kitvital|kitvital.fr; faux site; sauvermonepargne|sauvermonepargne.fr' });
-  assert.equal(sitesPlausible(env).length, 2);
+// Faux Plausible : jours avec visites (les jours en « 5 » sans visite), agrégats, objectifs, classements.
+function fauxPlausible(corps) {
+  if (corps.site_id === 'sauvermonepargne.fr') return repJson({ error: 'Plan sans API' }, 402);
+  const dims = corps.dimensions || [];
+  if (dims[0] === 'time:day') {
+    const [du, au] = corps.date_range;
+    const res = [];
+    for (let d = new Date(du + 'T00:00:00Z'); d <= new Date(au + 'T00:00:00Z'); d = new Date(d.getTime() + 86400000)) {
+      const j = d.toISOString().slice(0, 10);
+      if (j.endsWith('5')) continue;
+      const v = j >= '2026-10-17' ? 3 : 1;
+      res.push({ dimensions: [j], metrics: [v, v + 1, 2 * v] });
+    }
+    return repJson({ results: res });
+  }
+  if (dims[0] === 'event:goal') return repJson({ results: [{ dimensions: ['Clic marchand'], metrics: [1] }, { dimensions: ['Clic livret'], metrics: [4] }, { dimensions: ['A'], metrics: [2] }, { dimensions: ['B'], metrics: [0] }] });
+  if (dims[0] === 'visit:source') return corps.order_by ? repJson({ error: 'order_by' }, 400) : repJson({ results: [{ dimensions: ['Direct / None'], metrics: [5] }, { dimensions: ['Google'], metrics: [9] }] });
+  if (dims[0] === 'event:page') return repJson({ results: [{ dimensions: ['/livret'], metrics: [7] }, { dimensions: ['/'], metrics: [12] }] });
+  return repJson({ results: [{ metrics: [corps.date_range[0] === '2026-10-17' ? 57 : 35], dimensions: [] }] });
+}
+
+test('relevé Plausible : périodes en cours et précédentes, jours complets, ligne du jour mise à jour', async () => {
+  const env = envDe({ ...BASES, PLAUSIBLE_CLE: 'cle-plausible', PLAUSIBLE_SITES: 'kitvital|kitvital.fr; faux site; sauvermonepargne|sauvermonepargne.fr; deswatts|deswatts.fr|kitvital' });
+  assert.deepEqual(sitesPlausible(env).map((x) => [x.projet, x.rattache]), [['kitvital', null], ['sauvermonepargne', null], ['deswatts', 'kitvital']]);
   const maintenant = new Date('2026-11-16T05:17:00Z');
   await avecFetch((url, methode, corps) => {
-    if (url === 'https://plausible.io/api/v2/query') {
-      if (corps.site_id === 'sauvermonepargne.fr') return repJson({ error: 'Plan sans API' }, 402);
-      if (corps.dimensions) return repJson({ results: [{ dimensions: ['Clic livret'], metrics: [4] }] });
-      if (corps.date_range === '30d') return repJson({ results: [{ metrics: [60, 72, 150], dimensions: [] }] });
-      if (corps.date_range === '7d') return repJson({ results: [{ metrics: [35, 40], dimensions: [] }] });
-      return repJson({ results: [{ metrics: [5, 6], dimensions: [] }] });
-    }
+    if (url === 'https://plausible.io/api/v2/query') return fauxPlausible(corps);
     if (url.endsWith('/data_sources/projets-1/query')) return repJson({ results: [{ id: 'page-kv' }] });
     if (url.endsWith('/data_sources/mesures-1/query')) {
       const date = corps.filter.and[0].date.equals;
@@ -214,31 +229,76 @@ test('relevé Plausible : indicateurs écrits dans Mesures, ligne du jour mise �
     return repJson({}, 500);
   }, async (vus) => {
     const { releverPlausible } = await import('../src/releve.js');
-    const r = await releverPlausible(env, { maintenant });
+    const r = await releverPlausible(env, { maintenant, rang: 0 });
     assert.equal(r.date, '2026-11-16');
-    assert.equal(r.sites[0].ok, true);
-    assert.equal(r.sites[0].ecrites, 6);
-    assert.equal(r.sites[1].ok, false);
-    assert.match(r.sites[1].erreur, /402/);
-    assert.equal(r.ok, false);
+    assert.deepEqual(r.sites.map((x) => [x.site, x.ok, x.ecrites]), [['kitvital.fr', true, 12]]);
     const ecrits = vus.filter((v) => /\/pages(\/m-exist)?$/.test(v.url));
     assert.equal(ecrits.filter((v) => v.methode === 'PATCH').length, 1);
-    const parIndicateur = Object.fromEntries(ecrits.map((v) => [v.corps.properties.Indicateur.rich_text[0].text.content, v.corps.properties]));
-    assert.equal(parIndicateur['Visites 30 j'].Valeur.number, 72);
-    assert.equal(parIndicateur['Visiteurs 7 j'].Valeur.number, 35);
-    assert.equal(parIndicateur['Visiteurs (jour)'].Date.date.start, '2026-11-15');
-    assert.equal(parIndicateur['Objectif « Clic livret » 7 j']['Étape entonnoir'].select.name, 'Intention');
+    const par = Object.fromEntries(ecrits.map((v) => [v.corps.properties.Indicateur.rich_text[0].text.content, v.corps.properties]));
+    // 30 jours complets jusqu'au 15/11 (17/10 → 15/11) ; 25/10, 05/11 et 15/11 sans visite ; 4 visites par jour.
+    assert.equal(par['Visites 30 j'].Valeur.number, 27 * 4);
+    assert.equal(par['Visites 30 j (préc.)'].Valeur.number, 27 * 2);
+    assert.equal(par['Visites 7 j'].Valeur.number, 6 * 4);
+    assert.equal(par['Visites 7 j (préc.)'].Valeur.number, 6 * 4);
+    assert.equal(par['Visiteurs 30 j'].Valeur.number, 57);
+    assert.equal(par['Visiteurs 7 j'].Valeur.number, 35);
+    assert.equal(par['Pages vues 30 j'].Valeur.number, 27 * 6);
+    assert.equal(par['Visiteurs (jour)'].Date.date.start, '2026-11-15');
+    assert.equal(par['Visiteurs (jour)'].Valeur.number, 0);
+    assert.equal(par['Objectif « Clic livret » 7 j']['Étape entonnoir'].select.name, 'Intention');
+    assert.ok(!par['Objectif « B » 7 j']);
+    const jours = vus.find((v) => v.corps && (v.corps.dimensions || [])[0] === 'time:day').corps;
+    assert.deepEqual(jours.date_range, ['2026-09-17', '2026-11-15']);
     assert.equal(vus.find((v) => v.url.includes('plausible')).init.headers.Authorization, 'Bearer cle-plausible');
+    const deux = await releverPlausible(env, { maintenant, site: 'sauvermonepargne.fr' });
+    assert.equal(deux.ok, false);
+    assert.match(deux.sites[0].erreur, /402/);
+    assert.equal((await releverPlausible(env, { maintenant, site: 'inconnu.fr' })).raison, 'Aucun site à relever.');
   });
   const sans = await (await import('../src/releve.js')).releverPlausible(envDe(BASES));
   assert.equal(sans.ok, false);
 });
 
-test('relevé : le déclencheur programmé lance le relevé', async () => {
-  let attendu = null;
-  await relais.scheduled({}, envDe(BASES), { waitUntil: (p) => { attendu = p; } });
-  assert.ok(attendu && typeof attendu.then === 'function');
-  await attendu;
+test('audience : 90 jours complets, sources et pages triées, un site en erreur ne bloque pas les autres', async () => {
+  const env = envDe({ ...BASES, PLAUSIBLE_CLE: 'cle-plausible', PLAUSIBLE_SITES: 'kitvital|kitvital.fr; sauvermonepargne|sauvermonepargne.fr; deswatts|deswatts.fr|kitvital' });
+  assert.equal((await relais.fetch(requete(null, { methode: 'GET', chemin: '/audience' }), envDe(BASES))).status, 501);
+  await avecFetch((url, methode, corps) => fauxPlausible(corps), async () => {
+    const r = await relais.fetch(requete(null, { methode: 'GET', chemin: '/audience' }), env);
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.sites.length, 3);
+    const kv = j.sites[0];
+    assert.equal(kv.erreur, null);
+    assert.equal(kv.jours.length, 91);
+    assert.equal(kv.jours[0].date, j.du);
+    assert.equal(kv.jours.at(-1).date, j.au);
+    assert.ok(kv.jours.filter((x) => x.date.endsWith('5')).every((x) => x.visites === 0));
+    assert.deepEqual(kv.sources.map((x) => x.nom), ['Google', 'Direct / None']);
+    assert.deepEqual(kv.pages.map((x) => x.chemin), ['/', '/livret']);
+    assert.match(j.sites[1].erreur, /402/);
+    assert.deepEqual(j.sites[1].jours, []);
+    assert.equal(j.sites[2].rattache, 'kitvital');
+    assert.equal((await relais.fetch(requete(null, { methode: 'GET', chemin: '/audience', jeton: 'c'.repeat(64) }), env)).status, 401);
+  });
+});
+
+test('relevé : chaque passage programmé relève son site, un passage inconnu relève tout', async () => {
+  const env = envDe({ ...BASES, PLAUSIBLE_CLE: 'p', PLAUSIBLE_SITES: 'a|a.fr; b|b.fr; c|c.fr' });
+  const passer = async (evenement) => {
+    const appels = [];
+    await avecFetch((url, methode, corps) => { if (corps && corps.site_id) appels.push(corps.site_id); return repJson({ results: [] }); }, async () => {
+      let attendu = null;
+      await relais.scheduled(evenement, env, { waitUntil: (p) => { attendu = p; } });
+      await attendu;
+    });
+    return [...new Set(appels)];
+  };
+  assert.deepEqual(await passer({ cron: '19 5 * * *' }), ['b.fr']);
+  assert.deepEqual(await passer({}), ['a.fr', 'b.fr', 'c.fr']);
+  let p = null;
+  await relais.scheduled({}, envDe(BASES), { waitUntil: (x) => { p = x; } });
+  assert.ok(p && typeof p.then === 'function');
+  await p;
 });
 
 // ── GitHub ───────────────────────────────────────────────────────────────────

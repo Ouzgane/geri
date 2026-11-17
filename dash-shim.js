@@ -58,6 +58,8 @@
       sources.actions = paquet.actions || [];
       sources.decisions = paquet.decisions || [];
       sources.suivi = paquet.suivi ? [paquet.suivi] : [];
+      // Audience des sites (Plausible jour par jour, via le relais), ajoutée le 17/11/2026.
+      sources.audience = paquet.audience ? [paquet.audience] : [];
       sources.meta = [{ bases: paquet.bases || {}, connexions: paquet.connexions || {}, lu_le: paquet.lu_le || null }];
       Object.values(calculs).forEach((c) => { delete c.valeur; });
       etat.statut = 'ok';

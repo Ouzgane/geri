@@ -1120,3 +1120,241 @@ function blocTraction(p, couleur) {
   }
   return bloc;
 }
+
+// ---------- Audience des sites (ajoutée le 17/11/2026) : deuxième indicateur après le revenu ----------
+// Calculs dans pilotage.js (partagés avec Geri). Une couleur fixe par site, dans l'ordre de
+// PLAUSIBLE_SITES : la couleur suit le site, jamais son rang. Palette validée sur le fond sombre
+// (luminosité, daltonisme, contraste) pour trois sites ; au-delà, les noms restent écrits.
+const SITES_COULEURS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767'];
+const couleurSite = (s) => SITES_COULEURS[s.ordre % SITES_COULEURS.length];
+const nbFr = (v) => (typeof v === 'number' ? new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(v) : '—');
+const moyFr = (v) => (typeof v === 'number' ? new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(v) : '—');
+const pctSigne = (p) => (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(Math.round(p * 100)) + ' %';
+PP.audJours = 30;
+
+dash.calc('audience_stats', {
+  title: 'Audience des sites',
+  description: 'Visites Plausible des sites, jours complets jusqu’à hier : 30 et 7 derniers jours, périodes précédentes, tendance, cible.',
+  inputs: ['audience', 'mesures', 'projets', 'meta'],
+  fn: (a, m, p, meta) => [PC.audience({ audience: a[0], mesures: m, projets: p, sites: (kpi0(meta).connexions || {}).plausible_sites })],
+});
+const audience0 = () => kpi0(dash.data('audience_stats').data);
+
+// Variation lisible : flèche + texte (jamais la couleur seule).
+const deltaVisites = (v, apres) => {
+  const sp = el('span', 'pl-aud-delta');
+  if (!v) { sp.textContent = '—'; return sp; }
+  const [t, col] = v.sens === 'faible' ? ['volume faible', C.muted] : v.sens === 'nouveau' ? ['▲ nouveau', C.ok] : v.sens === 'stable' ? ['= stable', C.muted]
+    : [(v.sens === 'hausse' ? '▲ ' : '▼ ') + pctSigne(v.pct), v.sens === 'hausse' ? C.ok : C.bad];
+  const b = el('b', null, t);
+  b.style.color = col;
+  sp.append(b);
+  if (apres) sp.append(document.createTextNode(' ' + apres));
+  return sp;
+};
+
+texte('k-visites', ['audience_stats'], (a) => nbFr(kpi0(a).total && kpi0(a).total.v30));
+dash.draw('k-visites-sub', (n) => {
+  if (statut('audience_stats') !== 'ok') { n.textContent = '—'; return; }
+  const a = audience0();
+  if (!a.source) { n.textContent = 'Audience pas encore relevée'; return; }
+  const t = a.total;
+  n.replaceChildren(deltaVisites(t.var30, 'vs 30 j préc.'));
+  if (typeof t.v7 === 'number') n.append(document.createTextNode(' · 7 j : '), el('b', null, nbFr(t.v7)), document.createTextNode(' '), deltaVisites(t.var7));
+});
+
+dash.draw('audience', (n) => {
+  const s = statut('audience_stats');
+  if (s !== 'ok') { n.replaceChildren(messageEtat(s)); return; }
+  const a = audience0();
+  if (!a.sites || !a.sites.length) { n.replaceChildren(el('p', 'hud-empty', 'Aucun site suivi : la clé Plausible n’est pas encore branchée sur le relais.')); return; }
+  const sites = a.sites;
+  const parts = [];
+
+  // 1. Tuiles : tous les sites, puis chaque site.
+  const tuiles = el('div', 'pl-tuiles pl-aud-tuiles');
+  const tuile = (nom, couleur, v30, var30, v7, var7, sous) => {
+    const t = el('div', 'pl-tuile');
+    const tete = el('div', 'pl-aud-nom');
+    if (couleur) { const p = el('i', 'pl-aud-pastille'); p.style.background = couleur; tete.appendChild(p); }
+    tete.appendChild(el('span', null, nom));
+    const ligne7 = el('span', 'pl-tuile-sous');
+    ligne7.append(document.createTextNode('7 j : '), el('b', null, nbFr(v7)), document.createTextNode(' '), deltaVisites(var7));
+    t.append(tete, el('span', 'pl-tuile-val', nbFr(v30)), deltaVisites(var30, 'vs 30 j préc.'), ligne7, ...sous.filter(Boolean).map((x) => el('span', 'pl-tuile-sous', x)));
+    return t;
+  };
+  const tot = a.total;
+  tuiles.appendChild(tuile('Tous les sites · 30 j', null, tot.v30, tot.var30, tot.v7, tot.var7, [typeof tot.aujourdhui === 'number' ? `Aujourd’hui (en cours) : ${nbFr(tot.aujourdhui)}` : null]));
+  for (const x of sites) {
+    tuiles.appendChild(tuile(x.nom, couleurSite(x), x.v30, x.var30, x.v7, x.var7, [
+      typeof x.part === 'number' && sites.length > 1 ? `${Math.round(x.part * 100)} % des visites` : null,
+      typeof x.aujourdhui === 'number' ? `Aujourd’hui (en cours) : ${nbFr(x.aujourdhui)}` : null,
+      x.cible ? `Cible : ${nbFr(x.cible.valeur)} visites / 30 j (${Math.round(x.cible.progression * 100)} %)` : null,
+      x.rattache_nom ? `Rattaché à ${x.rattache_nom}` : null,
+      x.erreur ? 'Lecture directe impossible : ' + x.erreur : null,
+      x.source === 'mesures' ? `Relevé du ${jourLisible(x.releve_le, fmtJourCourt)} (base Mesures)` : null,
+    ]));
+  }
+  parts.push(tuiles);
+
+  // 2. Courbe : visites par jour (trait fin) et moyenne sur 7 jours (trait épais), un trait par site.
+  const avecSerie = sites.filter((x) => x.source === 'plausible' && x.serie.length);
+  const tete = el('div', 'pl-aud-tete');
+  tete.appendChild(el('h3', 'hud-h3', 'Visites par jour'));
+  const seg = el('div', 'hud-seg');
+  seg.setAttribute('role', 'group');
+  seg.setAttribute('aria-label', 'Période affichée');
+  for (const d of [30, 90]) {
+    const b = el('button', 'hud-seg-b', d + ' jours');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(PP.audJours === d));
+    b.addEventListener('click', () => { PP.audJours = d; dash.draw('audience'); });
+    seg.appendChild(b);
+  }
+  tete.appendChild(seg);
+  parts.push(tete);
+  const zone = el('div', 'hud-chart pl-aud-courbe');
+  parts.push(zone);
+  const debut = PC.ajouterJours(a.jour, -PP.audJours);
+  const series = avecSerie.map((x) => ({ x, pts: x.serie.filter((p) => p.date >= debut).map((p) => ({ ...p, d: parseJour(p.date) })) })).filter((sr) => sr.pts.length);
+
+  // 3. Légende : chaque site, puis la clé des traits.
+  const leg = el('div', 'hud-legend pl-aud-legende');
+  for (const x of sites) {
+    const sp = el('span');
+    const p = el('i', 'pl-aud-pastille'); p.style.background = couleurSite(x);
+    sp.append(p, document.createTextNode(x.nom));
+    leg.appendChild(sp);
+  }
+  if (series.length) leg.append(el('span', 'pl-aud-cle', 'trait épais : moyenne sur 7 jours · trait fin : chaque jour'));
+  parts.push(leg);
+
+  // 4. Analyse de progression.
+  const ana = el('div', 'pl-aud-analyse');
+  ana.appendChild(el('h3', 'hud-h3', 'Analyse de progression'));
+  const ulG = el('ul', 'hud-list');
+  (a.analyse.length ? a.analyse : ['Pas encore assez de relevés pour comparer.']).forEach((t) => ulG.appendChild(el('li', null, t)));
+  ana.appendChild(ulG);
+  const grilleA = el('div', 'pl-aud-analyses');
+  for (const x of sites) {
+    const bloc = el('div', 'pl-aud-bloc');
+    const nom = el('div', 'pl-aud-nom');
+    const p = el('i', 'pl-aud-pastille'); p.style.background = couleurSite(x);
+    nom.append(p, el('span', null, x.nom));
+    const ul = el('ul', 'pl-aud-liste');
+    x.analyse.forEach((t) => ul.appendChild(el('li', null, t)));
+    bloc.append(nom, ul);
+    grilleA.appendChild(bloc);
+  }
+  ana.appendChild(grilleA);
+  parts.push(ana);
+
+  // 5. Sources et pages, puis les données en tableau.
+  if (sites.some((x) => x.sources.length || x.pages.length)) {
+    const det = el('details', 'pl-aud-details');
+    det.appendChild(el('summary', null, 'Sources et pages les plus vues (30 jours complets)'));
+    const g = el('div', 'pl-aud-analyses');
+    for (const x of sites) {
+      if (!x.sources.length && !x.pages.length) continue;
+      const b = el('div', 'pl-aud-bloc');
+      b.appendChild(el('div', 'pl-aud-nom', x.nom));
+      if (x.sources.length) b.appendChild(el('p', 'pl-tuile-sous', 'Sources : ' + x.sources.map((y) => `${y.nom} ${nbFr(y.visiteurs)}`).join(' · ')));
+      if (x.pages.length) b.appendChild(el('p', 'pl-tuile-sous', 'Pages : ' + x.pages.map((y) => `${y.chemin} ${nbFr(y.visiteurs)}`).join(' · ')));
+      g.appendChild(b);
+    }
+    det.appendChild(g);
+    parts.push(det);
+  }
+  if (series.length) {
+    const det = el('details', 'pl-aud-details');
+    det.appendChild(el('summary', null, `Voir les données en tableau (${PP.audJours} jours)`));
+    const boite = el('div', 'pl-table-boite');
+    const table = el('table', 'pl-table');
+    const thead = el('thead'), tr = el('tr');
+    tr.append(el('th', null, 'Jour'), ...series.map((sr) => el('th', null, sr.x.nom)), ...(series.length > 1 ? [el('th', null, 'Total')] : []));
+    thead.appendChild(tr);
+    const tbody = el('tbody');
+    const dates = [...new Set(series.flatMap((sr) => sr.pts.map((p) => p.date)))].sort().reverse();
+    for (const d of dates) {
+      const r = el('tr');
+      const vals = series.map((sr) => (sr.pts.find((p) => p.date === d) || {}).visites || 0);
+      r.append(el('td', null, jourLisible(d)), ...vals.map((v) => el('td', null, nbFr(v))), ...(series.length > 1 ? [el('td', null, nbFr(vals.reduce((t, v) => t + v, 0)))] : []));
+      tbody.appendChild(r);
+    }
+    table.append(thead, tbody);
+    boite.appendChild(table);
+    det.appendChild(boite);
+    parts.push(det);
+  }
+  const lu = a.lu_le ? new Date(a.lu_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : null;
+  parts.push(el('p', 'hud-note pl-aud-note', a.source === 'plausible'
+    ? `Plausible, lu directement${lu ? ' à ' + lu : ''} : jours complets jusqu’au ${jourLisible(a.dernier_jour)} ; la journée en cours est à part. Une visite est une session : un visiteur qui revient le lendemain compte deux fois.`
+    : 'Relevés du matin de la base Mesures (Plausible). La courbe jour par jour s’affiche dès que le relais lit Plausible directement.'));
+  n.replaceChildren(...parts);
+  dessinerAudience(zone, series, a);
+});
+
+function dessinerAudience(n, series, a) {
+  if (!series.length) { n.replaceChildren(el('p', 'hud-empty', 'La courbe jour par jour arrive avec la lecture directe de Plausible.')); return; }
+  const W = Math.max(280, n.clientWidth || 600), H = Math.round(Math.max(240, Math.min(340, W * 0.42)));
+  const etiquettes = W >= 560 && series.length <= 4;
+  const m = { top: 14, right: etiquettes ? 150 : 16, bottom: 30, left: 44 };
+  const tous = series.flatMap((sr) => sr.pts);
+  const [d0, d1] = d3.extent(tous, (p) => p.d);
+  const x = d3.scaleUtc([d0, +d0 === +d1 ? d3.utcDay.offset(d1, 1) : d1], [m.left, W - m.right]);
+  const y = d3.scaleLinear([0, Math.max(4, d3.max(tous, (p) => p.visites) || 0)], [H - m.bottom, m.top]).nice();
+  const svg = d3.select(n).append('svg').attr('width', '100%').attr('height', H).attr('viewBox', `0 0 ${W} ${H}`)
+    .attr('role', 'img').attr('aria-label', `Visites par jour de chaque site sur ${PP.audJours} jours, avec la moyenne sur 7 jours`);
+  svg.append('g').attr('transform', `translate(${m.left},0)`).call(d3.axisLeft(y).ticks(4).tickFormat((v) => nbFr(v)).tickSize(-(W - m.left - m.right)))
+    .call((g) => { g.select('.domain').remove(); g.selectAll('line').style('stroke', 'rgba(77,227,255,.1)'); g.selectAll('text').attr('font-size', null).attr('font-family', null); });
+  const nbTicks = Math.max(2, Math.floor((W - m.left - m.right) / 120));
+  svg.append('g').attr('transform', `translate(0,${H - m.bottom})`).call(d3.axisBottom(x).ticks(nbTicks).tickFormat((v) => fmtJourCourt(v)).tickSizeOuter(0)).call(axeStyle);
+  const jourL = d3.line().x((p) => x(p.d)).y((p) => y(p.visites));
+  const moyL = d3.line().defined((p) => p.moyenne !== null).x((p) => x(p.d)).y((p) => y(p.moyenne));
+  const anim = mouvement() && premiereFois('audience-' + PP.audJours);
+  for (const sr of series) {
+    const col = couleurSite(sr.x);
+    svg.append('path').datum(sr.pts).attr('d', jourL).style('fill', 'none').style('stroke', col).style('stroke-width', 1).style('stroke-opacity', 0.45);
+    const p = svg.append('path').datum(sr.pts).attr('d', moyL).style('fill', 'none').style('stroke', col).style('stroke-width', 2).style('stroke-linecap', 'round');
+    const L = p.node().getTotalLength ? p.node().getTotalLength() : 0;
+    if (anim && L) p.attr('stroke-dasharray', `${L} ${L}`).attr('stroke-dashoffset', L).transition().duration(1200).ease(d3.easeCubicOut).attr('stroke-dashoffset', 0);
+  }
+  // Étiquettes directes en bout de courbe (texte en encre neutre, trait de la couleur du site), écartées si elles se chevauchent.
+  if (etiquettes) {
+    const fins = series.map((sr) => { const der = sr.pts[sr.pts.length - 1]; const v = der.moyenne !== null ? der.moyenne : der.visites; return { sr, y0: y(v), y: y(v) }; }).sort((p, q) => p.y - q.y);
+    for (let i = 1; i < fins.length; i++) if (fins[i].y - fins[i - 1].y < 14) fins[i].y = fins[i - 1].y + 14;
+    const dep = fins.length ? fins[fins.length - 1].y - (H - m.bottom) : 0;
+    if (dep > 0) fins.forEach((f) => { f.y -= dep; });
+    const xe = W - m.right;
+    for (const f of fins) {
+      svg.append('path').attr('d', `M${xe + 2},${f.y0}L${xe + 10},${f.y}L${xe + 16},${f.y}`).style('fill', 'none').style('stroke', couleurSite(f.sr.x)).style('stroke-width', 2);
+      svg.append('text').attr('x', xe + 20).attr('y', f.y).attr('dy', '0.35em').style('fill', C.text).style('font-size', '11px').style('font-family', 'var(--hud-mono)').text(f.sr.x.nom);
+    }
+  }
+  // Survol : réticule vertical, points sur les moyennes, infobulle avec chaque site.
+  const tip = infobulle(n);
+  const reticule = svg.append('line').attr('y1', m.top).attr('y2', H - m.bottom).style('stroke', 'rgba(155,239,255,.55)').style('stroke-width', 1).style('display', 'none');
+  const points = svg.append('g').style('display', 'none');
+  const marques = series.map((sr) => points.append('circle').attr('r', 4).style('fill', couleurSite(sr.x)).style('stroke', '#071a2b').style('stroke-width', 2));
+  const dates = [...new Set(tous.map((p) => p.date))].sort();
+  svg.append('rect').attr('x', m.left).attr('y', m.top).attr('width', W - m.left - m.right).attr('height', H - m.top - m.bottom).style('fill', 'transparent')
+    .on('pointerenter pointermove', (event) => {
+      const [px] = d3.pointer(event);
+      const cible = x.invert(px);
+      const d = dates.reduce((best, s) => (Math.abs(parseJour(s) - cible) < Math.abs(parseJour(best) - cible) ? s : best), dates[0]);
+      const dx = x(parseJour(d));
+      reticule.attr('x1', dx).attr('x2', dx).style('display', null);
+      points.style('display', null);
+      let total = 0;
+      const lignes = series.map((sr, i) => {
+        const p = sr.pts.find((q) => q.date === d);
+        if (!p) { marques[i].style('display', 'none'); return `${sr.x.nom} : —`; }
+        total += p.visites;
+        marques[i].style('display', null).attr('cx', dx).attr('cy', y(p.moyenne !== null ? p.moyenne : p.visites));
+        return `${sr.x.nom} : ${nbFr(p.visites)} visite${p.visites > 1 ? 's' : ''}${p.moyenne !== null ? ' · moyenne 7 j ' + moyFr(p.moyenne) : ''}`;
+      });
+      if (series.length > 1) lignes.push(`Total : ${nbFr(total)}`);
+      tip.montrer(event, jourLisible(d, fmtJourLong), lignes);
+    })
+    .on('pointerleave', () => { reticule.style('display', 'none'); points.style('display', 'none'); tip.cacher(); });
+}

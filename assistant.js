@@ -57,6 +57,10 @@
   const court = (v, n) => { const s = String(v).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
   const parDate = (a, b) => String(a.date || '').localeCompare(String(b.date || ''));
 
+  const audienceDe = (p) => (window.PILOTAGE_CALCULS && window.PILOTAGE_CALCULS.audience
+    ? window.PILOTAGE_CALCULS.audience({ audience: p.audience, mesures: p.mesures || [], projets: p.projets || [], sites: (p.connexions || {}).plausible_sites })
+    : null);
+
   function construireContexte(p) {
     const projets = p.projets || [], rapports = (p.rapports || []).slice().sort(parDate);
     const syntheses = (p.syntheses || []).slice().sort(parDate), revenus = (p.revenus || []).slice().sort(parDate);
@@ -73,6 +77,18 @@
     }
     L.push('', 'REVENUS ENCAISSÉS', `Total : ${eur(total)}, ${revenus.length} encaissement${revenus.length > 1 ? 's' : ''}.`);
     revenus.slice(-10).reverse().forEach((r) => L.push(`- ${r.date} · ${r.projet || r.projet_id} · ${eur(montant(r))}${r.type ? ' · ' + r.type : ''}${r.note ? ' · ' + court(r.note, 120) : ''}`));
+    // Audience des sites : le deuxième indicateur après le revenu (17/11/2026).
+    const au = audienceDe(p);
+    if (au && au.source) {
+      L.push('', `AUDIENCE DES SITES (deuxième indicateur après le revenu ; Plausible, jours complets jusqu’au ${au.dernier_jour}${au.source === 'mesures' ? ', d’après le relevé du matin' : ''})`, ...au.analyse.map((x) => '- ' + x));
+      au.sites.forEach((x) => L.push(`■ ${court(x.analyse.join(' '), 700)}${x.projet_nom && x.projet_nom !== x.nom ? ' (fiche ' + x.projet_nom + ')' : ''}`));
+      const sem = au.total.serie.slice(-56);
+      if (au.source === 'plausible' && sem.length === 56) {
+        const semaines = [];
+        for (let i = 0; i < 8; i++) semaines.push(sem.slice(i * 7, i * 7 + 7));
+        L.push('Visites par semaine, tous sites (8 dernières semaines complètes, de la plus ancienne à la plus récente) : ' + semaines.map((w) => `${w[0].date} → ${w.reduce((t, x) => t + x.visites, 0)}`).join(' ; '));
+      }
+    }
     L.push('', 'PROJETS');
     projets.forEach((x) => {
       const siens = rapports.filter((r) => r.projet_id === x.id);
@@ -165,6 +181,8 @@
       .replace(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g, (m, j, mo, a) => (+mo >= 1 && +mo <= 12 && +j >= 1 && +j <= 31 ? `${+j} ${MOIS[+mo - 1]}${a ? ' ' + a : ''}` : m))
       .replace(/~\s*/g, 'environ ')
       .replace(/(\d+(?:[.,]\d+)?)[\s\u00a0\u202f]?k[\s\u00a0\u202f]?€/g, '$1 mille euros')
+      .replace(/\+\s?(\d+(?:[.,]\d+)?)[\s\u00a0\u202f]?%/g, 'plus $1 pour cent')
+      .replace(/−\s?(\d+(?:[.,]\d+)?)[\s\u00a0\u202f]?%/g, 'moins $1 pour cent')
       .replace(/\s*[|•→·]\s*/g, ', ')
       .replace(/^\s*[-–]\s+/gm, '')
       .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
@@ -589,11 +607,21 @@
     if (!RELAIS) throw new Error('Relais non déployé.');
     await jetonPret;
     if (!jeton) throw new Error('Accès non prêt.');
-    const r = await fetch(RELAIS + '/releve', { method: 'POST', headers: { Authorization: 'Bearer ' + jeton } });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
+    const declares = ((donnees && donnees.connexions) || {}).plausible_sites;
+    const sites = Array.isArray(declares) && declares.length ? declares.map((x) => x.site) : [null];
+    const sortie = { ok: true, sites: [] };
+    for (const site of sites) {
+      const r = await fetch(RELAIS + '/releve' + (site ? '?site=' + encodeURIComponent(site) : ''), { method: 'POST', headers: { Authorization: 'Bearer ' + jeton } });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.erreur || 'Erreur ' + r.status);
+      if (j.raison && !(j.sites || []).length) sortie.raison = j.raison;
+      sortie.sites.push(...(j.sites || []));
+      sortie.ok = sortie.ok && !!j.ok;
+    }
+    if (sortie.sites.length) delete sortie.raison;
     await synchroniserNotion(true);
-    return j;
+    lireAudience(true);
+    return sortie;
   }
 
   function proposerFait(fait, liste) {
@@ -660,6 +688,8 @@
   async function saluer({ parle = true } = {}) {
     salue = true;
     await Promise.race([premiereSynchro, new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
+    // L'audience lue directement dans Plausible arrive juste après Notion : 3 s au plus.
+    if (audienceEnCours) await Promise.race([audienceEnCours, new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
     const p = donnees || {};
     const projets = p.projets || [];
     const total = (p.revenus || []).reduce((t, r) => t + montant(r), 0);
@@ -674,7 +704,10 @@
     const aRevoir = projets.filter((x) => !decisionEnAttente(x.decision) && x.decision !== 'Arrêter'
       && x.recommandation && x.recommandation !== x.decision && x.recommandation !== 'Accélérer').map(nom);
     const h = new Date().getHours();
+    const au = audienceDe(p);
+    const audience = au && au.source && au.analyse.length ? ' Côté audience : ' + au.analyse[0].replace(/\s*\([^)]*\)/g, '') : '';
     const texte = `${h >= 18 || h < 5 ? 'Bonsoir' : 'Bonjour'}. J’ai lu le rapport${date} : ${projets.length} projets suivis, ${total > 0 ? eur(total) + ' encaissés' : 'aucun revenu encaissé pour l’instant'}.`
+      + audience
       + (accel.length ? ` Le rapport propose d’accélérer ${liste(accel)}.` : '')
       + (aDecider.length ? ` ${liste(aDecider)} ${aDecider.length > 1 ? 'attendent' : 'attend'} ta décision.` : '')
       + (aRevoir.length ? ` Il recommande autre chose que ta décision pour ${liste(aRevoir)}.` : '')
@@ -912,6 +945,31 @@
     }
     return change;
   }
+  // Audience des sites (Plausible jour par jour, via le relais) : au plus toutes les 15 minutes,
+  // en parallèle de Notion ; le tableau et Geri se mettent à jour à son arrivée.
+  let audienceLue = 0, audienceEnCours = null;
+  function lireAudience(force) {
+    if (!RELAIS || !donnees || !(donnees.connexions || {}).plausible) return Promise.resolve();
+    if (audienceEnCours) return audienceEnCours;
+    if (!force && Date.now() - audienceLue < 15 * 60000) return Promise.resolve();
+    audienceEnCours = (async () => {
+      try {
+        await jetonPret;
+        if (!jeton) return;
+        const r = await fetch(RELAIS + '/audience', { headers: { Authorization: 'Bearer ' + jeton }, cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        audienceLue = Date.now();
+        if (JSON.stringify(j.sites) === JSON.stringify(donnees.audience && donnees.audience.sites)) return;
+        donnees.audience = j;
+        contexteTexte = construireContexte(donnees);
+        if (window.PILOTAGE && window.PILOTAGE.charger) window.PILOTAGE.charger(donnees);
+      } catch (e) { /* l'audience directe est un plus : les relevés de Mesures prennent le relais */ }
+      finally { audienceEnCours = null; }
+    })();
+    return audienceEnCours;
+  }
+
   // Bases Mesures, Actions, Décisions et Revenus, état des connexions et suivi GitHub.
   async function appliquerPilotage(j) {
     const avant = JSON.stringify([donnees.mesures, donnees.actions, donnees.decisions, donnees.revenus, donnees.bases, donnees.connexions, donnees.suivi]);
@@ -929,6 +987,7 @@
         if (r.ok) donnees.suivi = await r.json();
       } catch (e) { /* le suivi GitHub est un plus */ }
     } else donnees.suivi = null;
+    if (donnees.connexions.plausible) lireAudience(false); else donnees.audience = null;
     return JSON.stringify([donnees.mesures, donnees.actions, donnees.decisions, donnees.revenus, donnees.bases, donnees.connexions, donnees.suivi]) !== avant;
   }
   function indiquerSynchro(etat) {
@@ -992,6 +1051,7 @@
     synchroniser: () => synchroniserNotion(true),
     cocher,
     relever,
+    lireAudience: () => lireAudience(true),
     pourLaVoix,
   };
 })();

@@ -55,12 +55,16 @@ NOTION_REVENUS = "9e890c74-8500-4391-a576-c8655d4a0f6a"
 PAYHIP_PROJET = "kitvital"
 
 # Plausible (secret GitHub PLAUSIBLE_CLE = clé « Stats API », lecture seule) : projet|site, séparés par « ; ».
-PLAUSIBLE_SITES = "kitvital|kitvital.fr; sauvermonepargne|sauvermonepargne.fr"
+# Troisième champ facultatif : fiche Notion de rattachement (deswatts.fr est suivi dans la fiche KitVital).
+PLAUSIBLE_SITES = "kitvital|kitvital.fr; sauvermonepargne|sauvermonepargne.fr; deswatts|deswatts.fr|kitvital"
+# Un passage programmé par site, dans le même ordre (voir [triggers]).
+RELEVE_CRONS = "17 5 * * *;19 5 * * *;21 5 * * *"
 
 # GitHub (secret GitHub GH_LECTURE, posé ici sous le nom GITHUB_LECTURE = jeton fin en lecture seule) : dépôt=projet, séparés par « ; ».
 GITHUB_PROPRIETAIRE = "Ouzgane"
 GITHUB_DEPOTS = "pare-72h=kitvital; kitvital-actualites=kitvital; epargne-site=sauvermonepargne; raphael-video=videos-ia; trading5=trader5; tablee=tablee"
 
-# Relevé de l'audience chaque matin à 5 h 17 UTC (6 h 17 ou 7 h 17 à Paris), avant le rapport de 7 h 47.
+# Relevé de l'audience chaque matin, un site par passage, à 5 h 17, 5 h 19 et 5 h 21 UTC
+# (6 h 17 ou 7 h 17 à Paris), avant le rapport de 7 h 47.
 [triggers]
-crons = ["17 5 * * *"]
+crons = ["17 5 * * *", "19 5 * * *", "21 5 * * *"]

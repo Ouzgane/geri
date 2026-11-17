@@ -264,6 +264,31 @@ a.pl-titre:hover { text-decoration: underline; }
 .pl-tuile-val { font-family: var(--hud-mono); font-size: 26px; color: #ffffff; font-variant-numeric: tabular-nums; }
 .pl-tuile-sous { color: var(--hud-muted); font-size: 12px; line-height: 1.45; }
 .pl-gouv-pied { margin-top: 12px !important; }
+.pl-aud-tuiles { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.pl-aud-nom { display: flex; align-items: center; gap: 8px; font-family: var(--hud-mono); font-size: 11px; letter-spacing: .06em; color: var(--hud-text); }
+.pl-aud-pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.pl-aud-delta { font-size: 12px; color: var(--hud-muted); }
+.pl-aud-delta b { font-weight: 500; }
+.pl-aud-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 18px 0 6px; }
+.pl-aud-tete .hud-h3 { margin: 0 !important; }
+.pl-aud-courbe { min-height: 240px; }
+.pl-aud-legende { margin-top: 10px; }
+.pl-aud-cle { color: var(--hud-muted); }
+.pl-aud-analyse { margin-top: 18px; }
+.pl-aud-analyses { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
+.pl-aud-bloc { border: 1px solid var(--hud-line); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.pl-aud-liste { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.5; color: var(--hud-text); }
+.pl-aud-liste li { position: relative; padding-left: 12px; }
+.pl-aud-liste li::before { content: ''; position: absolute; left: 0; top: .72em; width: 6px; height: 1px; background: var(--hud-muted); }
+.pl-aud-details { margin-top: 14px; }
+.pl-aud-note { margin-top: 14px !important; }
+.pl-aud-details summary { cursor: pointer; font-family: var(--hud-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--hud-cyan); }
+.pl-table-boite { max-height: 320px; overflow: auto; margin-top: 10px; }
+.pl-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pl-table th, .pl-table td { padding: 5px 10px; border-bottom: 1px solid var(--hud-line); text-align: right; white-space: nowrap; }
+.pl-table th { position: sticky; top: 0; background: var(--hud-bg2); font-family: var(--hud-mono); font-weight: 500; font-size: 10.5px; letter-spacing: .06em; color: var(--hud-muted); }
+.pl-table th:first-child, .pl-table td:first-child { text-align: left; }
+.pl-table td { color: var(--hud-text); }
 .pl-sources { list-style: none; padding: 0; margin-top: 10px !important; display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
 .pl-sources li { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; }
 .pl-source-etat { font-family: var(--hud-mono); font-size: 10.5px; color: var(--hud-muted); text-align: right; }
@@ -583,6 +608,12 @@ a.pl-titre:hover { text-decoration: underline; }
         <div class="hud-pod-sub">30 derniers jours : <b data-draw="k-30j" class="dash-skeleton" data-source="kpi" data-field="total_30j" data-row="0">—</b> · Projets qui rapportent : <b><span data-draw="k-nbrev" class="dash-skeleton" data-source="kpi" data-field="nb_avec_revenu" data-row="0">—</span> / <span data-draw="k-nb" class="dash-skeleton" data-source="kpi" data-field="nb_projets" data-row="0">—</span></b></div>
         <i class="hud-pod-bar"></i>
       </div>
+      <div class="hud-panel hud-pod" id="kpi-visites">
+        <div class="hud-pod-label">Visites des sites · 30 j</div>
+        <div class="hud-pod-val dash-skeleton" data-draw="k-visites" data-source="audience_stats" data-field="total" data-row="0">—</div>
+        <div class="hud-pod-sub" data-draw="k-visites-sub" data-source="audience_stats">—</div>
+        <i class="hud-pod-bar"></i>
+      </div>
       <div class="hud-panel hud-pod" id="kpi-proche">
         <div class="hud-pod-label">Le plus proche du premier euro</div>
         <div class="hud-pod-val hud-pod-txt dash-skeleton" data-draw="lede-proche" data-source="kpi" data-field="proche_projet" data-row="0">—</div>
@@ -724,9 +755,15 @@ a.pl-titre:hover { text-decoration: underline; }
     <p class="hud-note">Les ventes Payhip arrivent seules dans la base Notion « Revenus » (webhook signé), et s'ajoutent ici sans doublon. Pour un autre encaissement, dis-le à Claude, ou ajoute une ligne à la base « Revenus » ou au fichier « Journal des revenus » : date (AAAA-MM-JJ), projet, montant en euros, type, note.</p>
   </section>
 
+  <section class="hud-section" id="audience">
+    <div class="hud-h"><span class="hud-idx">06</span><h2>Audience des sites</h2><i class="hud-rule"></i></div>
+    <p class="hud-note">Le deuxième indicateur après le revenu : les visites de chaque site, lues dans Plausible. Chaque période est comparée à la précédente de même durée ; sous 10 visites, une variation ne veut rien dire et n'est pas commentée.</p>
+    <div class="hud-panel" data-draw="audience" data-source="audience_stats"></div>
+  </section>
+
   <section class="hud-section" id="projets">
     <div class="hud-head2">
-      <div class="hud-h" style="flex:1 1 280px"><span class="hud-idx">06</span><h2>Projets</h2><i class="hud-rule"></i></div>
+      <div class="hud-h" style="flex:1 1 280px"><span class="hud-idx">07</span><h2>Projets</h2><i class="hud-rule"></i></div>
       <div class="hud-controls">
         <label>Pôle <select class="dash-select" data-draw="filtre-pole" aria-label="Filtrer par pôle"></select></label>
         <label>Tri <select class="dash-select pp-tri" aria-label="Trier les projets">
@@ -741,7 +778,7 @@ a.pl-titre:hover { text-decoration: underline; }
   </section>
 
   <section class="hud-section" id="evolution">
-    <div class="hud-h"><span class="hud-idx">07</span><h2>Trajectoires</h2><i class="hud-rule"></i></div>
+    <div class="hud-h"><span class="hud-idx">08</span><h2>Trajectoires</h2><i class="hud-rule"></i></div>
     <p class="hud-note">L'avancement de chaque projet, rapport après rapport. Une ligne s'ajoute chaque matin.</p>
     <div class="hud-panel"><div class="hud-chart hud-chart-lg" id="courbe-avancement" data-draw="evolution" data-source="rapports"></div></div>
   </section>
@@ -759,6 +796,7 @@ a.pl-titre:hover { text-decoration: underline; }
       <dt>Gouvernance</dt><dd>Projets ouverts : statut Actif, Accéléré ou Analyse en cours, face à un plafond de 3 (réglable dans config.js). Décisions à revoir : celles du journal des décisions arrivées à leur date de revue (14 jours par défaut).</dd>
       <dt>Critère d'arrêt</dt><dd>Le tien : un seuil daté (par exemple « moins de 3 ventes au 31 décembre ») que le rapport du matin vérifie à sa date. Avec l'objectif de revenu mensuel, c'est à toi de le fixer.</dd>
       <dt>Sources</dt><dd>Plausible (audience, lecture seule), Payhip (ventes reçues par webhook), GitHub (lecture seule) et le dossier Drive « GERI : relevés à déposer » pour ce qu'aucun agent ne peut lire (KDP, Partenaires Amazon). Une source « éteinte » attend sa clé.</dd>
+      <dt>Audience</dt><dd>Visites Plausible de chaque site (une visite est une session), sur les 30 et 7 derniers jours complets, comparées aux 30 et 7 jours précédents. La tendance prolonge la pente des 4 dernières semaines ; la projection vers une cible prolonge le cumul glissant sur 30 jours. Ce ne sont pas des prévisions.</dd>
       <dt>Revenus</dt><dd>Uniquement les encaissements du journal des revenus, en euros. Aucun montant estimé.</dd>
       <dt>Accès</dt><dd>Les données sont chiffrées (AES-256) et ne se lisent qu'avec le mot de passe, directement dans ton navigateur. « Verrouiller » efface le mot de passe mémorisé sur cet appareil.</dd>
       <dt>Assistant</dt><dd>Le bouton lumineux en bas à droite ouvre l'assistant. Il répond par écrit et à voix haute à partir des données de ce tableau. Il n'écoute jamais : aucun micro n'est utilisé. Il ne modifie rien. Le bouton haut-parleur coupe la voix.</dd>
@@ -797,14 +835,14 @@ a.pl-titre:hover { text-decoration: underline; }
   </section>
 </div>
 <script src="vendor/d3.min.js"></script>
-<script src="pilotage.js?v=20261115c"></script>
-<script src="dash-shim.js?v=20261115c"></script>
-<script src="app.js?v=20261115c"></script>
-<script src="config.js?v=20261115c"></script>
-<script src="geri.js?v=20261115c"></script>
-<script src="voix.js?v=20261115c"></script>
-<script src="musique.js?v=20261115c"></script>
-<script src="assistant.js?v=20261115c"></script>
-<script src="acces.js?v=20261115c"></script>
+<script src="pilotage.js?v=20261117a"></script>
+<script src="dash-shim.js?v=20261117a"></script>
+<script src="app.js?v=20261117a"></script>
+<script src="config.js?v=20261117a"></script>
+<script src="geri.js?v=20261117a"></script>
+<script src="voix.js?v=20261117a"></script>
+<script src="musique.js?v=20261117a"></script>
+<script src="assistant.js?v=20261117a"></script>
+<script src="acces.js?v=20261117a"></script>
 </body>
 </html>

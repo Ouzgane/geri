@@ -46,6 +46,15 @@ Pour changer de mot de passe : republier avec le nouveau, mettre à jour la tâc
 - **Briefing** : « Ce qui a changé depuis hier », la revue du dimanche, et les alertes marquées « Nouveau » ou avec leur nombre de jours.
 - Les calculs sont dans `pilotage.js`, partagés par le tableau et par Geri ; tests : `node --test outils/pilotage.test.mjs`.
 
+## Audience des sites (17 novembre 2026)
+
+Le deuxième indicateur après le revenu : indicateur « Visites des sites · 30 j » juste après « Revenu encaissé », et section 06 « Audience des sites ».
+
+- Sites suivis : `PLAUSIBLE_SITES` dans `relais/wrangler.toml` (`projet|domaine|fiche de rattachement`) : kitvital.fr, sauvermonepargne.fr, deswatts.fr (rattaché à la fiche KitVital). Chaque site garde sa couleur, dans cet ordre.
+- Progression : 30 et 7 derniers jours complets comparés aux 30 et 7 jours précédents ; sous 10 visites, la variation n'est pas commentée. Tendance : pente des 4 dernières semaines, en % par semaine. Cible : celle de la fiche quand son indicateur clé porte sur les visites (sauvermonepargne.fr), avec la date d'atteinte à ce rythme.
+- Courbe des visites par jour (moyenne sur 7 jours en trait épais), 30 ou 90 jours, survol jour par jour, données en tableau, sources et pages les plus vues.
+- Geri reçoit la même analyse (partie « AUDIENCE DES SITES ») et la cite à l'accueil après le revenu. Sans lecture directe de Plausible, le site et Geri reprennent le relevé du matin de « Mesures ».
+
 ## Connexions du pilotage
 
 Toutes lisent sans rien modifier dans les projets ; seules les bases Notion du pilotage reçoivent des écritures. Chaque clé est un secret GitHub de ce dépôt (Settings → Secrets and variables → Actions), posé dans le relais au déploiement : après avoir ajouté ou changé une clé, relancer le workflow « Relais IA » (Actions → Relais IA → Run workflow). Sans clé, la connexion reste éteinte et le site l'indique.
@@ -53,7 +62,7 @@ Toutes lisent sans rien modifier dans les projets ; seules les bases Notion du p
 | Connexion | Secret | Ce qu'elle fait |
 |---|---|---|
 | Payhip | `PAYHIP_CLE` (clé API, Settings → Developer) | Payhip envoie un webhook signé à chaque vente ou remboursement vers `…workers.dev/payhip` ; le relais vérifie la signature (SHA-256 de la clé) et inscrit la ligne dans « Revenus », sans e-mail ni IP de l'acheteur, sans doublon. L'adresse se règle dans le compte Payhip (Settings → Developer → Webhook URL, événements paid et refunded). |
-| Plausible | `PLAUSIBLE_CLE` (clé « Stats API », lecture seule) | Chaque matin à 5 h 17 UTC, le relais relève visites et visiteurs (jour, 7 et 30 jours) et les objectifs des sites de `PLAUSIBLE_SITES`, dans « Mesures ». `POST /releve` relance le relevé à la demande. |
+| Plausible | `PLAUSIBLE_CLE` (clé « Stats API », lecture seule) | Chaque matin (5 h 17, 5 h 19 et 5 h 21 UTC, un passage par site de `PLAUSIBLE_SITES`, ordre de `RELEVE_CRONS`), le relais écrit dans « Mesures », sur des jours complets jusqu'à la veille : visites 30 j et 7 j avec leurs périodes précédentes, visiteurs 30 j et 7 j, pages vues 30 j, visites et visiteurs de la veille, 3 premiers objectifs sur 7 j. `POST /releve?site=…` relance un site à la demande. `GET /audience` sert au site les visites jour par jour sur 90 jours, les sources et les pages (Plausible lu en direct, pas de copie). |
 | GitHub | `GH_LECTURE` (jeton fin en lecture : Contents, Pull requests, Actions ; GitHub refuse les noms en `GITHUB_…`, le relais le reçoit sous le nom `GITHUB_LECTURE`) | `GET /suivi` lit les dépôts de `GITHUB_DEPOTS` : pull requests ouvertes, dernier commit, échecs récents (gardé 10 minutes). |
 | Google Drive | aucun (connecteur du rapport du matin) | Dossier « GERI : relevés à déposer » : tu y déposes les exports qu'aucun agent ne peut lire (KDP, Partenaires Amazon) ; le rapport du matin les reporte dans « Mesures ». |
 
