@@ -1159,7 +1159,8 @@ dash.draw('k-visites-sub', (n) => {
   const a = audience0();
   if (!a.source) { n.textContent = 'Audience pas encore relevée'; return; }
   const t = a.total;
-  n.replaceChildren(deltaVisites(t.var30, 'vs 30 j préc.'));
+  const nouveaux = t.lancement_domine ? (t.nouveaux || []).length : 0;
+  n.replaceChildren(deltaVisites(t.var30, 'vs 30 j préc.' + (nouveaux ? ` (${nouveaux} site${nouveaux > 1 ? 's' : ''} lancé${nouveaux > 1 ? 's' : ''} depuis)` : '')));
   if (typeof t.v7 === 'number') n.append(document.createTextNode(' · 7 j : '), el('b', null, nbFr(t.v7)), document.createTextNode(' '), deltaVisites(t.var7));
 });
 
@@ -1184,7 +1185,10 @@ dash.draw('audience', (n) => {
     return t;
   };
   const tot = a.total;
-  tuiles.appendChild(tuile('Tous les sites · 30 j', null, tot.v30, tot.var30, tot.v7, tot.var7, [typeof tot.aujourdhui === 'number' ? `Aujourd’hui (en cours) : ${nbFr(tot.aujourdhui)}` : null]));
+  const k = tot.var30_constant;
+  tuiles.appendChild(tuile('Tous les sites · 30 j', null, tot.v30, tot.var30, tot.v7, tot.var7, [
+    k ? `À périmètre constant : ${k.sens === 'faible' ? 'volume faible' : k.sens === 'stable' ? 'stable' : pctSigne(k.pct)} (hors ${tot.nouveaux.join(', ')})` : null,
+    typeof tot.aujourdhui === 'number' ? `Aujourd’hui (en cours) : ${nbFr(tot.aujourdhui)}` : null]));
   for (const x of sites) {
     tuiles.appendChild(tuile(x.nom, couleurSite(x), x.v30, x.var30, x.v7, x.var7, [
       typeof x.part === 'number' && sites.length > 1 ? `${Math.round(x.part * 100)} % des visites` : null,

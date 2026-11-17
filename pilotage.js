@@ -312,6 +312,23 @@
     const analyse = [];
     if (typeof total.v30 === 'number') {
       analyse.push(`${entier(total.v30)} visite${total.v30 > 1 ? 's' : ''} sur 30 jours sur ${mesures30.length} site${mesures30.length > 1 ? 's' : ''}${phraseVariation(total.var30, 30)}.`);
+      // Sites sans aucune visite la période d'avant (lancés entre-temps) : la hausse du total vient d'eux ;
+      // on donne aussi la variation à périmètre constant.
+      const nouveaux = mesures30.filter((s) => s.var30 && s.var30.sens === 'nouveau');
+      const anciens = mesures30.filter((s) => typeof s.v30p === 'number' && s.v30p > 0);
+      total.nouveaux = nouveaux.map((s) => s.nom);
+      total.var30_constant = nouveaux.length && anciens.length ? variation(anciens.reduce((t, s) => t + s.v30, 0), anciens.reduce((t, s) => t + s.v30p, 0)) : null;
+      const apport = nouveaux.reduce((t, s) => t + s.v30, 0);
+      const hausse = typeof total.v30p === 'number' ? total.v30 - total.v30p : null;
+      total.lancement_domine = !!(nouveaux.length && hausse > 0 && apport >= hausse / 2);
+      if (nouveaux.length) {
+        const noms = nouveaux.map((s) => s.nom).join(' et ');
+        const k = total.var30_constant;
+        const pl = nouveaux.length > 1;
+        analyse.push(`${noms} ${pl ? "n'avaient" : "n'avait"} aucune visite les 30 jours précédents`
+          + (total.lancement_domine ? ` : la hausse du total vient d'abord de ${pl ? 'leur' : 'son'} lancement.` : ` ; ${pl ? 'ils apportent' : 'il apporte'} ${entier(apport)} visite${apport > 1 ? 's' : ''}.`)
+          + (k ? ` À périmètre constant (${anciens.map((s) => s.nom).join(', ')}) : ${entier(k.actuel)} visites${k.sens === 'faible' ? ', volume trop faible pour conclure' : k.sens === 'stable' ? `, stable (${entier(k.precedent)})` : `, ${pctFr(k.pct)} (${entier(k.precedent)})`}.` : ''));
+      }
       const tete = mesures30.slice().sort((x, y) => y.v30 - x.v30)[0];
       if (tete && mesures30.length > 1 && total.v30 > 0) analyse.push(`${tete.nom} en apporte ${Math.round(tete.part * 100)} %.`);
       const lisibles = mesures30.length > 1 ? mesures30.filter((s) => s.var30 && (s.var30.sens === 'hausse' || s.var30.sens === 'baisse')) : [];

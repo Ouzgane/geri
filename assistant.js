@@ -705,7 +705,8 @@
       && x.recommandation && x.recommandation !== x.decision && x.recommandation !== 'Accélérer').map(nom);
     const h = new Date().getHours();
     const au = audienceDe(p);
-    const audience = au && au.source && au.analyse.length ? ' Côté audience : ' + au.analyse[0].replace(/\s*\([^)]*\)/g, '') : '';
+    const lances = au && au.total && au.total.lancement_domine ? ` La hausse vient d’abord du lancement de ${au.total.nouveaux.join(' et ')}.` : '';
+    const audience = au && au.source && au.analyse.length ? ' Côté audience : ' + au.analyse[0].replace(/\s*\([^)]*\)/g, '') + lances : '';
     const texte = `${h >= 18 || h < 5 ? 'Bonsoir' : 'Bonjour'}. J’ai lu le rapport${date} : ${projets.length} projets suivis, ${total > 0 ? eur(total) + ' encaissés' : 'aucun revenu encaissé pour l’instant'}.`
       + audience
       + (accel.length ? ` Le rapport propose d’accélérer ${liste(accel)}.` : '')

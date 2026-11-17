@@ -129,6 +129,16 @@ test('audience : périodes complètes, progression, tendance, projection vers la
   assert.equal(Math.round(sme.part * 100), 95);
   assert.deepEqual(r.analyse.slice(0, 2), ['2 391 visites sur 30 jours sur 3 sites, +67 % par rapport aux 30 jours précédents (1 428).', 'sauvermonepargne.fr en apporte 95 %.']);
   assert.equal(r.analyse[2], 'Plus forte progression : kitvital.fr (+100 %).');
+  assert.deepEqual(r.total.nouveaux, []);
+  // Un site lancé pendant la période : la hausse du total vient de lui ; variation à périmètre constant.
+  const lance = P.audience({ audience: { sites: [a.sites[0], { ...a.sites[1], jours: serie((n) => (n <= 30 ? 1 : 0)) }] }, projets, sites: config.slice(0, 2) }, { jour });
+  assert.deepEqual(lance.total.nouveaux, ['sauvermonepargne.fr']);
+  assert.equal(lance.total.lancement_domine, false);
+  assert.equal(lance.total.var30_constant.pct, 1);
+  assert.equal(lance.analyse[1], "sauvermonepargne.fr n'avait aucune visite les 30 jours précédents ; il apporte 30 visites. À périmètre constant (kitvital.fr) : 120 visites, +100 % (60).");
+  const domine = P.audience({ audience: { sites: [{ ...a.sites[0], jours: serie((n) => (n === 0 ? 0 : 2)) }, { ...a.sites[1], jours: serie((n) => (n <= 30 ? 5 : 0)) }] }, projets, sites: config.slice(0, 2) }, { jour });
+  assert.equal(domine.total.lancement_domine, true);
+  assert.equal(domine.analyse[1], "sauvermonepargne.fr n'avait aucune visite les 30 jours précédents : la hausse du total vient d'abord de son lancement. À périmètre constant (kitvital.fr) : 60 visites, stable (60).");
 });
 
 test('audience : sans historique, relevés de Mesures ; site sans mesure signalé ; règle du bruit', () => {
