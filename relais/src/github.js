@@ -25,11 +25,12 @@ async function gh(env, chemin) {
 }
 
 export async function suiviGithub(env, { maintenant = new Date() } = {}) {
-  const proprio = String(env.GITHUB_PROPRIETAIRE || 'Ouzgane');
+  const proprio = String(env.GITHUB_PROPRIETAIRE || '').trim();
   const depuis = maintenant.getTime() - 7 * 86400000;
   const depots = await Promise.all(depotsSuivis(env).map(async ({ depot, projet }) => {
     const base = `/repos/${encodeURIComponent(proprio)}/${encodeURIComponent(depot)}`;
     const ligne = { depot, projet_id: projet, prs: [], dernier_commit: null, echecs: [], erreur: null };
+    if (!proprio) { ligne.erreur = 'GITHUB_PROPRIETAIRE manquant'; return ligne; }
     try {
       const [prs, commits, runs] = await Promise.all([
         gh(env, base + '/pulls?state=open&per_page=30'),

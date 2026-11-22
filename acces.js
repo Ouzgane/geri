@@ -1,7 +1,9 @@
 // Écran d'accès : déchiffre les données dans le navigateur avec le mot de passe.
 // Le mot de passe ne quitte jamais l'appareil ; s'il est mémorisé, c'est dans ce navigateur seulement.
 (function () {
-  const FICHIER = 'donnees/pilotage.chiffre.json';
+  // Une copie de GERI range ses données dans perso/ (réglage « donnees » de perso/site.js).
+  const choisi = String((window.PILOTAGE_IA && window.PILOTAGE_IA.donnees) || '');
+  const FICHIER = /^[a-z0-9][a-z0-9/_.-]*\.json$/i.test(choisi) && !choisi.includes('..') ? choisi : 'donnees/pilotage.chiffre.json';
   const MEMO = 'pilotage.mdp';
   const ecran = document.getElementById('acces');
   const form = document.getElementById('acces-form');

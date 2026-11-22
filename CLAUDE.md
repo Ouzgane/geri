@@ -21,3 +21,8 @@ Cette règle passe avant toutes les autres, « zéro dette » comprise.
 - Audience des sites (17 novembre 2026) : deuxième indicateur après le revenu, partout (tableau, Geri, rapport du matin). Toujours sur des jours complets, période comparée à la précédente de même durée, pas de commentaire de variation sous 10 visites.
 - Les connexions (Plausible, GitHub, Payhip) lisent les projets sans jamais y écrire. Régler un compte de projet (webhook Payhip, comptes de réseaux) reste une action du porteur, notée dans la fiche du projet.
 
+
+## Copies de GERI pour d'autres personnes (22 novembre 2026)
+- Le guide est `PARTAGER.md` : fork, quatre secrets, workflow « Installer GERI », GitHub Pages. Les réglages d'une copie vivent dans `perso/` (relais.json, site.js, données chiffrées), que l'original ne modifie jamais : « Sync fork » ne crée pas de conflit.
+- Sur ce dépôt : ne jamais créer `perso/relais.json` ni donner d'effet à `perso/site.js` (le relais et le site passeraient en mode copie). Le workflow « Relais IA » reconnaît l'original à son propriétaire (Ouzgane) ; une copie non installée ne déploie rien.
+- Toute nouvelle variable personnelle du relais (identifiant, compte, site) s'ajoute aussi à `PERSONNELS` dans `outils/appliquer-perso.mjs` ; une nouvelle base ou propriété Notion lue par le relais, à `outils/notion-bases.mjs` (un test le vérifie).

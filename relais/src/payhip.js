@@ -61,7 +61,7 @@ export async function recevoirPayhip(request, env) {
   const attendue = await sha256(String(env.PAYHIP_CLE).trim());
   if (!egal(String(o.signature || '').trim().toLowerCase(), attendue)) return rep({ erreur: 'Signature refusée.' }, 401);
   if (o.type !== 'paid' && o.type !== 'refunded') return rep({ ok: true, ignore: String(o.type || '').slice(0, 40) }, 200);
-  const ligne = versLigne(o, String(env.PAYHIP_PROJET || 'kitvital'));
+  const ligne = versLigne(o, String(env.PAYHIP_PROJET || '').trim().toLowerCase());
   if (!ligne) return rep({ ok: true, ignore: 'transaction sans identifiant' }, 200);
   try {
     if (await trouverRevenu(env, ligne.ref)) return rep({ ok: true, doublon: true }, 200);
