@@ -1,0 +1,72 @@
+name: Installer GERI
+
+# Pour une copie de GERI (voir PARTAGER.md) : écrit les réglages du propriétaire dans perso/,
+# crée les bases Notion sous sa page, chiffre les données de départ avec son mot de passe,
+# puis lance le déploiement du relais. Peut être relancé sans risque. Ne fait rien sur le dépôt d'origine.
+on:
+  workflow_dispatch:
+    inputs:
+      page_notion:
+        description: "Lien de ta page Notion « Pilotage des projets » (partagée avec ton intégration). Vide : Notion plus tard."
+        required: false
+        default: ''
+      nom:
+        description: "Nom de l'assistante"
+        required: false
+        default: 'Geri'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: installer-geri
+  cancel-in-progress: false
+
+jobs:
+  installer:
+    if: github.repository != 'Ouzgane/geri'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: node --test outils/*.test.mjs
+
+      - name: Installer
+        env:
+          PILOTAGE_MDP: ${{ secrets.PILOTAGE_MDP }}
+          NOTION_CLE: ${{ secrets.NOTION_CLE }}
+          PAGE_NOTION: ${{ inputs.page_notion }}
+          NOM: ${{ inputs.nom }}
+          PROPRIETAIRE: ${{ github.repository_owner }}
+          DEPOT: ${{ github.event.repository.name }}
+        run: node outils/installer.mjs
+
+      - name: Enregistrer perso/
+        run: |
+          git add perso
+          if git diff --cached --quiet; then echo "perso/ déjà à jour."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Installation de GERI : réglages de ${GITHUB_REPOSITORY_OWNER}"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Déployer le relais
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Secrets Cloudflare absents : le site s'ouvre, mais sans assistante ni Notion en direct. Ajoute CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID, puis lance « Relais IA »."
+            echo "- Relais non déployé : ajoute les secrets CLOUDFLARE_API_TOKEN et CLOUDFLARE_ACCOUNT_ID, puis Actions → Relais IA → Run workflow." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh workflow run relais.yml --ref "${GITHUB_REF_NAME}"
+          echo "- Déploiement du relais lancé : Actions → Relais IA." >> "$GITHUB_STEP_SUMMARY"

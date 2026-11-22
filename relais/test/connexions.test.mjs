@@ -7,7 +7,7 @@ import { analyser, validerNotion, consignes } from '../src/consignes.js';
 import { versLigne } from '../src/payhip.js';
 import { lireIndicateurs, jourParis } from '../src/notion.js';
 import { sitesPlausible } from '../src/releve.js';
-import { depotsSuivis } from '../src/github.js';
+import { depotsSuivis, suiviGithub } from '../src/github.js';
 
 const JETON = 'a'.repeat(64);
 const EMPREINTE = createHash('sha256').update(JETON).digest('hex');
@@ -303,7 +303,7 @@ test('relevé : chaque passage programmé relève son site, un passage inconnu r
 
 // ── GitHub ───────────────────────────────────────────────────────────────────
 test('suivi GitHub : pull requests ouvertes, dernier commit et échecs récents, en lecture seule', async () => {
-  const env = envDe({ ...BASES, GITHUB_LECTURE: 'ghp_lecture', GITHUB_DEPOTS: 'pare-72h=kitvital; ../x=y; trading5=trader5' });
+  const env = envDe({ ...BASES, GITHUB_LECTURE: 'ghp_lecture', GITHUB_PROPRIETAIRE: 'Ouzgane', GITHUB_DEPOTS: 'pare-72h=kitvital; ../x=y; trading5=trader5' });
   assert.equal(depotsSuivis(env).length, 2);
   assert.equal((await relais.fetch(requete(null, { methode: 'GET', chemin: '/suivi' }), envDe(BASES))).status, 501);
   const recent = new Date(Date.now() - 86400000).toISOString();
@@ -325,4 +325,14 @@ test('suivi GitHub : pull requests ouvertes, dernier commit et échecs récents,
     assert.ok(vus.every((v) => v.init.headers.Authorization === 'Bearer ghp_lecture'));
     assert.ok(vus.every((v) => v.url.startsWith('https://api.github.com/repos/Ouzgane/')));
   });
+});
+
+// ── Copie de GERI : aucune valeur du propriétaire d'origine par défaut ───────
+test('sans GITHUB_PROPRIETAIRE ni PAYHIP_PROJET : rien n’est lu chez un autre compte, ni rattaché à un autre projet', async () => {
+  await avecFetch(() => { throw new Error('aucun appel attendu'); }, async (vus) => {
+    const s = await suiviGithub({ GITHUB_LECTURE: 'x', GITHUB_DEPOTS: 'site=mon-site' });
+    assert.deepEqual(s.depots.map((d) => d.erreur), ['GITHUB_PROPRIETAIRE manquant']);
+    assert.equal(vus.length, 0);
+  });
+  assert.equal(versLigne({ ...VENTE }, '').projet_id, '');
 });

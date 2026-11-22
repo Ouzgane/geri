@@ -2,10 +2,12 @@ name: Relais IA
 
 # Déploie le relais IA sur Cloudflare à chaque modification de relais/,
 # puis branche le site sur l'adresse du relais (config.js).
+# Dans une copie de GERI (perso/relais.json présent, voir PARTAGER.md), les réglages de la copie
+# remplacent ceux de l'original le temps du déploiement, et l'adresse va dans perso/site.js.
 on:
   push:
     branches: [main]
-    paths: ['relais/**', '.github/workflows/relais.yml']
+    paths: ['relais/**', '.github/workflows/relais.yml', 'perso/relais.json']
   workflow_dispatch:
 
 permissions:
@@ -39,10 +41,29 @@ jobs:
         working-directory: relais
         run: npm test
 
+      - name: Réglages de cette copie (perso/relais.json)
+        id: copie
+        run: |
+          if [ -f perso/relais.json ]; then
+            node outils/appliquer-perso.mjs perso/relais.json relais/wrangler.toml
+            echo "cible=perso/site.js" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REPOSITORY_OWNER,,}" = "ouzgane" ]; then
+            # Instance d'origine : réglages de relais/wrangler.toml, adresse du relais dans config.js.
+            echo "cible=config.js" >> "$GITHUB_OUTPUT"
+          else
+            # Copie pas encore installée : ne jamais déployer les réglages de l'original.
+            echo "cible=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Secrets Cloudflare présents ?
         id: verif
+        env:
+          CIBLE: ${{ steps.copie.outputs.cible }}
         run: |
-          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -z "$CIBLE" ]; then
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Cette copie de GERI n'est pas encore installée : lance d'abord Actions → Installer GERI (voir PARTAGER.md). Il déploiera ensuite le relais."
+          elif [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "pret=true" >> "$GITHUB_OUTPUT"
           else
             echo "pret=false" >> "$GITHUB_OUTPUT"
@@ -90,6 +111,7 @@ jobs:
         env:
           URL_DEPLOYEE: ${{ steps.deploy.outputs.deployment-url }}
           SORTIE: ${{ steps.deploy.outputs.command-output }}
+          CIBLE: ${{ steps.copie.outputs.cible }}
         run: |
           URL="${URL_DEPLOYEE:-$(printf '%s' "$SORTIE" | grep -oE 'https://[a-z0-9.-]+\.workers\.dev' | head -1)}"
           URL="${URL%/}"
@@ -99,11 +121,12 @@ jobs:
           fi
           echo "Relais : $URL"
           curl -fsS --max-time 20 "$URL/" || echo "::notice::Le relais ne répond pas encore (propagation workers.dev, quelques minutes)."
-          sed -i -E "s#^([[:space:]]*relais:[[:space:]]*)'[^']*'#\1'${URL}'#" config.js
-          if git diff --quiet -- config.js; then echo "config.js déjà à jour."; exit 0; fi
+          CIBLE="${CIBLE:-config.js}"
+          sed -i -E "s#^([[:space:]]*relais:[[:space:]]*)'[^']*'#\1'${URL}'#" "$CIBLE"
+          if git diff --quiet -- "$CIBLE"; then echo "$CIBLE déjà à jour."; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git add config.js
+          git add "$CIBLE"
           git commit -m "Assistant : branchement sur le relais ${URL}"
-          git pull --rebase --autostash origin main
-          git push origin HEAD:main
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

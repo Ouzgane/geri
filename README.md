@@ -4,6 +4,8 @@ Site : [ouzgane.github.io/geri](https://ouzgane.github.io/geri/) (dépôt Ouzgan
 
 Version en ligne du tableau de pilotage du portefeuille de projets : revenus, briefing du jour, matrice d'arbitrage en 3D, fiches projets et trajectoires. Une assistante, Geri (prononcé « Jéri »), répond aux questions sur le tableau, par écrit et à voix haute.
 
+**Tu veux ton propre GERI ?** Suis [PARTAGER.md](PARTAGER.md) : une copie sur ton compte GitHub, avec tes projets dans ton Notion, installée depuis le navigateur en une demi-heure.
+
 ## Règle primordiale : pilotage seulement
 
 Ce dépôt, le site et le projet Claude « GERI » servent uniquement au pilotage et au suivi des projets : lire leur état, le tenir à jour dans Notion, aider à arbitrer. Toute action sur un projet (contenu, code, site, tâche planifiée, compte) se mène dans l'espace de ce projet, jamais ici, et deux projets ne se mélangent jamais dans une même session (règle du porteur du 15 novembre 2026, détaillée dans `CLAUDE.md`). Geri applique la même règle : elle recommande et dit dans quel projet agir, elle n'agit pas.
@@ -152,6 +154,9 @@ Si le mot de passe du site change : `PILOTAGE_MDP='…' node outils/empreinte-ia
 - `musique.js` : le lecteur Spotify.
 - `config.js` : adresse du relais, nom de l'assistante, sa prononciation et sa voix.
 - `relais/` : le relais IA (Cloudflare Worker) et ses tests : `src/notion.js` (lectures et écritures Notion), `src/payhip.js` (ventes), `src/releve.js` (Plausible), `src/github.js` (suivi en lecture).
-- `.github/workflows/relais.yml` : déploiement automatique du relais.
+- `.github/workflows/relais.yml` : déploiement automatique du relais (dans une copie, avec les réglages de `perso/relais.json`, appliqués par `outils/appliquer-perso.mjs`).
+- `.github/workflows/installer.yml`, `outils/installer.mjs`, `outils/notion-bases.mjs` : installation d'une copie sur un autre compte (voir `PARTAGER.md`) ; ne s'exécutent pas sur ce dépôt.
+- `perso/` : réglages propres à une copie (écrits par l'installation). Ici, `perso/site.js` est vide d'effet.
+- `modeles/rapport-du-matin.md` : texte générique du rapport du matin, rempli pour chaque copie dans `perso/rapport-du-matin.md`.
 - `vendor/` : D3, onnxruntime-web et piper-phonemize (voir `vendor/LICENCES.md`).
-- `outils/` : publication et vérification du fichier chiffré, empreinte de l'assistant (Node 20 ou plus, sans dépendance).
+- `outils/` : publication et vérification du fichier chiffré, empreinte de l'assistant, installation d'une copie (Node 20 ou plus, sans dépendance) ; tests : `node --test outils/*.test.mjs`.
